@@ -22,6 +22,12 @@ getHistoryLeft = adjState (\(a :<| s)-> return (a,s))
 getHistoryRight :: Monad m => M.AdjointT (Env (Seq a)) (Reader (Seq a)) m a
 getHistoryRight = adjState (\(s |>: a)-> return (a,s))
 
+viewHistoryLeft :: Monad m => M.AdjointT (Env (Seq a)) (Reader (Seq a)) m a
+viewHistoryLeft = adjState (\(a :<| s)-> return (a,a :<| s))
+
+viewHistoryRight :: Monad m => M.AdjointT (Env (Seq a)) (Reader (Seq a)) m a
+viewHistoryRight = adjState (\(s |>: a)-> return (a,s |>: a))
+
 getHistoryLength :: Monad m => M.AdjointT (Env (Seq a)) (Reader (Seq a)) m Int
 getHistoryLength = fmap Seq.length $ adjGetEnv 
 
