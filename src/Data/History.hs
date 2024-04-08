@@ -23,27 +23,40 @@ addToHistoryLeft = adjBiparam (\a s-> a <| s)
 addToHistoryRight :: Monad m => a -> M.AdjointT (Env (Seq a)) (Reader (Seq a)) m ()
 addToHistoryRight = adjBiparam (\a s-> s |> a)
 
-getHistoryLeft :: Monad m => M.AdjointT (Env (Seq a)) (Reader (Seq a)) m a
-getHistoryLeft = adjState (\(a :<| s)-> return (a,s))
+getHistoryLeft :: Monad m => M.AdjointT (Env (Seq a)) (Reader (Seq a)) m (Maybe a)
+getHistoryLeft = adjState (\ss-> case ss of
+	(a :<| s) -> return (Just a,s)
+	_ -> return (Nothing, ss)
+	)
 
-getHistoryRight :: Monad m => M.AdjointT (Env (Seq a)) (Reader (Seq a)) m a
-getHistoryRight = adjState (\(s :|> a)-> return (a,s))
+getHistoryRight :: Monad m => M.AdjointT (Env (Seq a)) (Reader (Seq a)) m (Maybe a)
+getHistoryRight = adjState (\ss -> case ss of
+	(s :|> a) -> return (Just a,s)
+	_ -> return (Nothing, ss)
+	)
+viewHistoryLeft :: Monad m => M.AdjointT (Env (Seq a)) (Reader (Seq a)) m (Maybe a)
+viewHistoryLeft = adjState (\ss -> case ss of
+	(a :<| s) -> return (Just a,a :<| s)
+	_ -> return (Nothing, ss)
+	)
 
-viewHistoryLeft :: Monad m => M.AdjointT (Env (Seq a)) (Reader (Seq a)) m a
-viewHistoryLeft = adjState (\(a :<| s)-> return (a,a :<| s))
-
-viewHistoryRight :: Monad m => M.AdjointT (Env (Seq a)) (Reader (Seq a)) m a
-viewHistoryRight = adjState (\(s :|> a)-> return (a,s :|> a))
+viewHistoryRight :: Monad m => M.AdjointT (Env (Seq a)) (Reader (Seq a)) m (Maybe a)
+viewHistoryRight = adjState (\ss -> case ss of
+	(s :|> a) -> return (Just a,s :|> a)
+	_ -> return (Nothing, ss)
+	)
 
 getHistoryLength :: Monad m => M.AdjointT (Env (Seq a)) (Reader (Seq a)) m Int
 getHistoryLength = fmap Seq.length $ adjGetEnv 
 
-hitoryRondomElement :: (Monad m, MonadIO m) => M.AdjointT (Env (Seq a)) (Reader (Seq a)) m a
+hitoryRondomElement :: (Monad m, MonadIO m) => M.AdjointT (Env (Seq a)) (Reader (Seq a)) m (Maybe a)
 hitoryRondomElement = do
 	i <- getHistoryLength
 	s <- adjGetEnv
+	lift $ liftIO $ print i
 	ri <- lift $ randomRIO (0,i)
-	return $ index s ri
+	lift $ liftIO $ print $ "random:" ++ show ri
+	return $ Seq.lookup ri s
 
 type HistoryAdjL a = (Env Int) :.: (Env (Seq a))
 
@@ -61,7 +74,7 @@ addToLHistoryLeft a = do
 	b <- hitoryCheckLengthLimit
 	if b
 		then return Nothing
-		else fmap Just $ adjSnd getHistoryRight
+		else adjSnd getHistoryRight
 
 addToLHistoryRight :: Monad m => a -> M.AdjointT (HistoryAdjL a) (HistoryAdjR a) m (Maybe a)
 addToLHistoryRight a = do
@@ -69,4 +82,4 @@ addToLHistoryRight a = do
 	b <- hitoryCheckLengthLimit
 	if b
 		then return Nothing
-		else fmap Just $ adjSnd getHistoryLeft
+		else adjSnd getHistoryLeft

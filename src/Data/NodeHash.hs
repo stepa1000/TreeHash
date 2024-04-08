@@ -17,6 +17,8 @@ import Data.Maybe
 import Data.Foldable
 import Data.Graph.Inductive.PatriciaTree as G
 import Data.Graph.Inductive.Graph as G
+import Data.Graph.Inductive.Query.ArtPoint as G
+import Data.Graph.Inductive.Query.DFS as G
 import Data.Aeson as Aeson
 import Control.Monad.Trans.Adjoint as M
 import Control.Monad.Reader
@@ -40,19 +42,25 @@ generateNode :: (Monad m, MonadIO m, Hashable a, Eq a) =>
   SizeSet -> 
   [Hashed a] -> 
   a -> 
-  M.AdjointT (HistoryAdjL a) (HistoryAdjR a) m (NodeHash a)
+  M.AdjointT (HistoryAdjL a) (HistoryAdjR a) m (Maybe (NodeHash a))
 generateNode i existHash nextA = do
-	srTrue <- fmap fold $ mapM (\_->fmap (Set.singleton . hashed) $ adjSnd hitoryRondomElement) [0..i]
+	srTrue <- fmap (fold . fmap (Set.singleton . hashed)) $ 
+		fmap catMaybes $ 
+		mapM (\_-> adjSnd hitoryRondomElement) [0..i]
 	let le = P.length existHash
 	srFalse <- fmap fold $ mapM (\_->do
 		ri <- lift $ randomRIO (0,le)
-		let rs = existHash !! ri
-		if not $ Set.member rs srTrue
-			then return $ Set.singleton rs 
-			else return Set.empty 
+		--lift $ liftIO $ print ri
+		if not (P.null existHash)
+			then do
+				let rs = existHash !! ri
+				if not $ Set.member rs srTrue
+					then return $ Set.singleton rs 
+					else return Set.empty 
+			else return Set.empty
 		) [0..i]
-	vh <- adjSnd $ fmap hashed viewHistoryLeft
-	return $ NodeH srTrue srFalse vh (hashed nextA)
+	mvh <- adjSnd viewHistoryLeft
+	mapM (\vh->return $ NodeH srTrue srFalse (hashed vh) (hashed nextA)) mvh
 
 type PairSetH a = (HashSet (Hashed a), HashSet (Hashed a))
 
@@ -119,14 +127,57 @@ setNodeHashToGr (nh :: NodeHash a) = do
 		return (n1,n2)
 		)
 
+showGr :: (Monad m, Hashable a, Eq a, Show a) =>
+	M.AdjointT 
+		(Env (Gr (Hashed a) (PairSetH a))) 
+		(Reader (Gr (Hashed a) (PairSetH a))) 
+		m 
+		String
+showGr = do
+	gr <- adjGetEnv
+	return $ prettify gr
+
+getArtPoints :: (Monad m, Hashable a, Eq a, Show a) =>
+	M.AdjointT 
+		(Env (Gr (Hashed a) (PairSetH a))) 
+		(Reader (Gr (Hashed a) (PairSetH a))) 
+		m 
+		[Hashed a]
+getArtPoints = do
+	gr <- adjGetEnv
+	let lp = catMaybes $ fmap (\p-> G.lab gr p) $ G.ap gr
+	return lp
+
+getComponentsGr :: (Monad m, Hashable a, Eq a, Show a) =>
+	M.AdjointT 
+		(Env (Gr (Hashed a) (PairSetH a))) 
+		(Reader (Gr (Hashed a) (PairSetH a))) 
+		m 
+		[[Hashed a]]
+getComponentsGr = do
+	gr <- adjGetEnv
+	let lp = fmap catMaybes $ (fmap . fmap) (\p-> G.lab gr p) $ G.components gr
+	return lp 
+
+getSccGr :: (Monad m, Hashable a, Eq a, Show a) =>
+	M.AdjointT 
+		(Env (Gr (Hashed a) (PairSetH a))) 
+		(Reader (Gr (Hashed a) (PairSetH a))) 
+		m 
+		[[Hashed a]]
+getSccGr = do
+	gr <- adjGetEnv
+	let lp = fmap catMaybes $ (fmap . fmap) (\p-> G.lab gr p) $ G.scc gr
+	return lp 
+
 stepMemoring :: (Monad m, MonadIO m, Hashable a, Eq a) => 
   SizeSet -> 
   [Hashed a] -> 
   a -> 
   M.AdjointT (HGrAdjL a) (HGrAdjR a) m ()
 stepMemoring i existHash nextA = do
-	nh <- adjSnd $ generateNode i existHash nextA
-	adjFst $ setNodeHashToGr nh
+	mnh <- adjSnd $ generateNode i existHash nextA
+	mapM_ (\nh->adjFst $ setNodeHashToGr nh) mnh
 
 data Memored a = Memored
 	{ listMemored :: [Hashed a]
@@ -148,32 +199,35 @@ upMemored :: (Monad m, Hashable a, Eq a) =>
 	MaxMising ->
 	M.AdjointT (MemAdjL a) (MemAdjR a) m [(PairSetH a, Hashed a)]
 upMemored mm = do
-	vh <- adjSnd $ adjSnd $ adjSnd $ fmap hashed viewHistoryLeft
-	gri <- adjSnd $ adjFst getInfoHGr
-	gr <- adjSnd $ adjFst adjGetEnv
-	lmem <- adjFst $ adjGetEnv
-	lmem2 <- mapM (\mem-> do
-		if Set.member vh (fst $ setMemored mem) && not (Set.member vh (snd $ setMemored mem))
-			then return $ mem {listMemored = vh:(listMemored mem)}
-			else return $ mem {mising = (mising mem) + 1}
-		) lmem
-	lmem3 <- fmap catMaybes $ mapM (\mem->do
-		if ((mising mem) > mm || 
-			(P.length (listMemored mem) > Set.size (fst $ setMemored mem)) ||
-			(Set.member vh (snd $ setMemored mem))
-			)
-			then return Nothing
-			else return $ Just mem
-		) lmem2
-	let addLMem = foldMapWithKey (\k v-> fmap (\(x,y)->Memored [vh] k (lab' $ context gr x) (lab' $ context gr y) 0) v) $ snd gri
-	adjFst $ adjSetEnv (lmem3 ++ addLMem) (Identity ())
-	fmap catMaybes $ mapM (\mem->do
-		if vh == (lastHesh mem)
-			then if Set.fromList (listMemored mem) == (fst $ setMemored mem)
-				then return $ Just (setMemored mem,nextHash mem)
+	mvh <- adjSnd $ adjSnd $ adjSnd viewHistoryLeft
+	fmap (join . maybeToList) $ mapM (\v->do
+		let vh = hashed v
+		gri <- adjSnd $ adjFst getInfoHGr
+		gr <- adjSnd $ adjFst adjGetEnv
+		lmem <- adjFst $ adjGetEnv
+		lmem2 <- mapM (\mem-> do
+			if Set.member vh (fst $ setMemored mem) && not (Set.member vh (snd $ setMemored mem))
+				then return $ mem {listMemored = vh:(listMemored mem)}
+				else return $ mem {mising = (mising mem) + 1}
+			) lmem
+		lmem3 <- fmap catMaybes $ mapM (\mem->do
+			if ((mising mem) > mm || 
+				(P.length (listMemored mem) > Set.size (fst $ setMemored mem)) ||
+				(Set.member vh (snd $ setMemored mem))
+				)
+				then return Nothing
+				else return $ Just mem
+			) lmem2
+		let addLMem = foldMapWithKey (\k v-> fmap (\(x,y)->Memored [vh] k (lab' $ context gr x) (lab' $ context gr y) 0) v) $ snd gri
+		adjFst $ adjSetEnv (lmem3 ++ addLMem) (Identity ())
+		fmap catMaybes $ mapM (\mem->do
+			if vh == (lastHesh mem)
+				then if Set.fromList (listMemored mem) == (fst $ setMemored mem)
+					then return $ Just (setMemored mem,nextHash mem)
+					else return Nothing
 				else return Nothing
-			else return Nothing
-		) lmem2
+			) lmem2
+		) mvh
 
 upadteMemored :: (Monad m, MonadIO m, Hashable a, Eq a) => 
 	MaxMising ->

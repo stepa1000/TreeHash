@@ -32,6 +32,13 @@ import Data.Imp.BSS
 main :: IO ()
 main = do
 	initEmptyGraph sspw
+	grShowToFIleIO 
+		"data/GraphShow" 
+		"data/ShowAP" 
+		"data/ShowComponent"
+		"data/ShowStrongComponent"
+		sspw
+	print "post initEmptyGraph"
 	runStartLTM sspw
 
 sspw = SPWord "data/PEPN.fb2" "data/hashGraph.json"
