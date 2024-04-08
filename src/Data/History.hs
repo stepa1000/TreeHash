@@ -1,7 +1,14 @@
+{-# LANGUAGE TypeOperators #-}
+
 module Data.History where
 
 import Data.Sequence as Seq
 import System.Random
+import Control.Monad.Trans.Adjoint as M
+import Control.Monad.Reader
+import Control.Comonad.Env
+import Control.Monad.IO.Class
+import GHC.Generics
 import Control.Base.Comonad
 import Control.Core.Biparam
 import Control.Core.Composition
@@ -57,9 +64,9 @@ addToLHistoryLeft a = do
 		else fmap Just $ adjSnd getHistoryRight
 
 addToLHistoryRight :: Monad m => a -> M.AdjointT (HistoryAdjL a) (HistoryAdjR a) m (Maybe a)
-addToLHistoryRight = do
+addToLHistoryRight a = do
 	adjSnd $ addToHistoryRight a
 	b <- hitoryCheckLengthLimit
 	if b
 		then return Nothing
-		else fmap Just $ adjSnd getHistoryLength
+		else fmap Just $ adjSnd getHistoryLeft

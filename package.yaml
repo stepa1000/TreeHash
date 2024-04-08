@@ -24,7 +24,14 @@ dependencies:
 - adjunction-combinators
 - containers
 - random
-
+- adjunctions
+- mtl
+- comonad
+- fgl
+- hashable
+- unordered-containers
+- aeson
+- bytestring
 
 ghc-options:
 - -Wall

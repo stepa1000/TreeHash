@@ -1,6 +1,12 @@
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
+
 module Data.NodeHash where
 
-import Preluse as Pre
+import Prelude as P
 import Data.Sequence as Seq
 import System.Random
 import Data.Hashable
@@ -8,7 +14,16 @@ import Data.HashSet as Set
 import Data.HashMap.Lazy as Map
 import Data.Tree as Tree
 import Data.Maybe
+import Data.Foldable
 import Data.Graph.Inductive.PatriciaTree as G
+import Data.Graph.Inductive.Graph as G
+import Data.Aeson as Aeson
+import Control.Monad.Trans.Adjoint as M
+import Control.Monad.Reader
+import Control.Monad
+import Control.Comonad.Env
+import Control.Monad.IO.Class
+import GHC.Generics
 import Control.Base.Comonad
 import Control.Core.Biparam
 import Control.Core.Composition
@@ -28,12 +43,12 @@ generateNode :: (Monad m, MonadIO m, Hashable a, Eq a) =>
   M.AdjointT (HistoryAdjL a) (HistoryAdjR a) m (NodeHash a)
 generateNode i existHash nextA = do
 	srTrue <- fmap fold $ mapM (\_->fmap (Set.singleton . hashed) $ adjSnd hitoryRondomElement) [0..i]
-	let le = Pre.length existHesh
+	let le = P.length existHash
 	srFalse <- fmap fold $ mapM (\_->do
 		ri <- lift $ randomRIO (0,le)
-		let rs = existHash ! ri
-		if not $ member rs srTrue
-			then return $ Set.singleton ri 
+		let rs = existHash !! ri
+		if not $ Set.member rs srTrue
+			then return $ Set.singleton rs 
 			else return Set.empty 
 		) [0..i]
 	vh <- adjSnd $ fmap hashed viewHistoryLeft
@@ -48,8 +63,8 @@ type HGrAdjR a = (HistoryAdjR a) :.: (Reader (Gr (Hashed a) (PairSetH a)))
 getHashNode :: NodeHash a -> Hashed a
 getHashNode (NodeH _ _ _ h) = h
 
-grtLastHesh :: NodeHash a -> Hashed a
-grtLastHesh (NodeH _ _ h _) = h
+getLastHash :: NodeHash a -> Hashed a
+getLastHash (NodeH _ _ h _) = h
 
 getPairSetH :: NodeHash a -> PairSetH a
 getPairSetH (NodeH x y _ _) = (x,y)
@@ -63,12 +78,12 @@ getInfoHGr ::(Monad m, Hashable a, Eq a) =>
 getInfoHGr = do
 	gr <- adjGetEnv
 	return $ ufold (\(lbnl,n,a,lbnr) (x,y)-> 
-			( x <> (Map.singelton a n)
+			( x <> (Map.singleton a n)
 			, y <> 
-				( P.foldl (\ m1 m2 -> unionWith (P.++) m1 m2) Map.empry $ 
+				( P.foldl (\ m1 m2 -> unionWith (P.++) m1 m2) Map.empty $ 
 					fmap (\ (b,n2) -> Map.singleton b [(n2,n)]) lbnl 
 				) <>
-				( P.foldl (\ m1 m2 -> unionWith (P.++) m1 m2) Map.empry $ 
+				( P.foldl (\ m1 m2 -> unionWith (P.++) m1 m2) Map.empty $ 
 					fmap (\ (b,n2) -> Map.singleton b [(n,n2)]) lbnr
 				)
 			)
@@ -81,22 +96,22 @@ setNodeHashToGr :: (Monad m, Hashable a, Eq a) =>
 		(Reader (Gr (Hashed a) (PairSetH a))) 
 		m 
 		()
-setNodeHashToGr nh = do
+setNodeHashToGr (nh :: NodeHash a) = do
 	(mN, mE) <- getInfoHGr
 	let hn = getHashNode nh
 	let psh = getPairSetH nh
 	when (not $ Map.member hn mN) $ do
 		gr <- adjGetEnv
-		let [nn] = newNodes 1 gr
-		let ngr = insNode (nn,hn)
-		adjSetEnv ngr (Identity ())
+		let [nn] = newNodes @Gr @(Hashed a) @(PairSetH a) 1 gr
+		let ngr = insNode (nn,hn) gr
+		adjSetEnv (ngr :: Gr (Hashed a) (PairSetH a)) (Identity ())
 	(mN2, mE2) <- getInfoHGr
-	let mn1 = Map.lookup nh mN2
-	let lhn = getLastHesh nh
+	let mn1 = Map.lookup hn mN2
+	let lhn = getLastHash nh
 	let mn2 = Map.lookup lhn mN2
 	mapM_ (\(x,y)-> do
 		grn <- adjGetEnv
-		when (not $ hasLEdge gtn (y,x,psh)) $ do 
+		when (not $ hasLEdge grn (y,x,psh)) $ do 
 			adjSetEnv (insEdge (y,x,psh) grn) (Identity ())
 		) (do
 		n1 <- mn1
@@ -108,8 +123,8 @@ stepMemoring :: (Monad m, MonadIO m, Hashable a, Eq a) =>
   SizeSet -> 
   [Hashed a] -> 
   a -> 
-  M.AdjointT (HGrAdjL a) (HGrAdjR a) m (NodeHash a)
-stepMemoring i existHash nextA =
+  M.AdjointT (HGrAdjL a) (HGrAdjR a) m ()
+stepMemoring i existHash nextA = do
 	nh <- adjSnd $ generateNode i existHash nextA
 	adjFst $ setNodeHashToGr nh
 
@@ -123,11 +138,11 @@ data Memored a = Memored
 
 type MaxMising = Int
 
-type LMemored = [Memored]
+type LMemored a = [Memored a]
 
-type MemAdjL = (Env (LMemored a)) :.: (HGrAdjL a)
+type MemAdjL a = (Env (LMemored a)) :.: (HGrAdjL a)
 
-type MemAdjR = (HGrAdjR a) :.: (Reader (LMemored a))
+type MemAdjR a = (HGrAdjR a) :.: (Reader (LMemored a))
 
 upMemored :: (Monad m, Hashable a, Eq a) => 
 	MaxMising ->
@@ -138,27 +153,29 @@ upMemored mm = do
 	gr <- adjSnd $ adjFst adjGetEnv
 	lmem <- adjFst $ adjGetEnv
 	lmem2 <- mapM (\mem-> do
-		if member vh (fst $ setMemored mem) && not (member vh (snd $ setMemored mem))
+		if Set.member vh (fst $ setMemored mem) && not (Set.member vh (snd $ setMemored mem))
 			then return $ mem {listMemored = vh:(listMemored mem)}
 			else return $ mem {mising = (mising mem) + 1}
 		) lmem
 	lmem3 <- fmap catMaybes $ mapM (\mem->do
 		if ((mising mem) > mm || 
-			-- (P.length (listMemored mem) >= Set.size (fst $ setMemored mem)) ||
-			(member vh (snd $ setMemored mem))
+			(P.length (listMemored mem) > Set.size (fst $ setMemored mem)) ||
+			(Set.member vh (snd $ setMemored mem))
 			)
 			then return Nothing
-			else return $ Just mm
+			else return $ Just mem
 		) lmem2
 	let addLMem = foldMapWithKey (\k v-> fmap (\(x,y)->Memored [vh] k (lab' $ context gr x) (lab' $ context gr y) 0) v) $ snd gri
 	adjFst $ adjSetEnv (lmem3 ++ addLMem) (Identity ())
-	mapM (\mem->do
+	fmap catMaybes $ mapM (\mem->do
 		if vh == (lastHesh mem)
-			then if fromList (listMemored mem) == (fst $ setMemored mem)
-				then return (setMemored mem,nextHash mem)
+			then if Set.fromList (listMemored mem) == (fst $ setMemored mem)
+				then return $ Just (setMemored mem,nextHash mem)
+				else return Nothing
+			else return Nothing
 		) lmem2
 
-upadteMemored :: (Monad m, Hashable a, Eq a) => 
+upadteMemored :: (Monad m, MonadIO m, Hashable a, Eq a) => 
 	MaxMising ->
 	SizeSet -> 
   [Hashed a] -> 
@@ -171,8 +188,17 @@ upadteMemored mm ss le a = do
 		) lpshh
 	when (P.null lb || not (or lb)) $ do
 		adjSnd $ stepMemoring ss le a
-	adjSnd $ adjSnd $ adjSnd $ addToLHistoryLeft a
+	adjSnd $ adjSnd $ addToLHistoryLeft a
 	return lb
+
+instance (ToJSON a, ToJSON b) => ToJSON (Gr a b)
+instance (FromJSON a, FromJSON b) => FromJSON (Gr a b)
+
+instance (ToJSON a, Hashable a) => ToJSON (Hashed a) where
+	toJSON = toJSON . unhashed 
+
+instance (FromJSON a, Hashable a) => FromJSON (Hashed a) where
+	parseJSON = fmap hashed . parseJSON 
 
 data DataMemored a = DMemored
   { historyLength :: Int
