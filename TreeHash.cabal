@@ -25,6 +25,9 @@ source-repository head
 
 library
   exposed-modules:
+      Data.History
+      Data.Imp.BSS
+      Data.NodeHash
       Lib
   other-modules:
       Paths_TreeHash
@@ -34,7 +37,10 @@ library
       src
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
-      base >=4.7 && <5
+      adjunction-combinators
+    , base >=4.7 && <5
+    , containers
+    , random
   default-language: Haskell2010
 
 executable TreeHash-exe
@@ -48,7 +54,10 @@ executable TreeHash-exe
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       TreeHash
+    , adjunction-combinators
     , base >=4.7 && <5
+    , containers
+    , random
   default-language: Haskell2010
 
 test-suite TreeHash-test
@@ -63,5 +72,8 @@ test-suite TreeHash-test
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       TreeHash
+    , adjunction-combinators
     , base >=4.7 && <5
+    , containers
+    , random
   default-language: Haskell2010

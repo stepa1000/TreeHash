@@ -6,6 +6,7 @@ import System.Random
 import Data.Hashable
 import Data.HashSet as Set
 import Data.HashMap.Lazy as Map
+import Data.Tree as Tree
 import Data.Maybe
 import Data.Graph.Inductive.PatriciaTree as G
 import Control.Base.Comonad
@@ -18,8 +19,10 @@ data NodeHash a = NodeH (HashSet (Hashed a)) (HashSet (Hashed a)) (Hashed a) (Ha
 
 type SeqHash a = Seq (NodeHash a)
 
+type SizeSet = Int
+
 generateNode :: (Monad m, MonadIO m, Hashable a, Eq a) => 
-  Int -> 
+  SizeSet -> 
   [Hashed a] -> 
   a -> 
   M.AdjointT (HistoryAdjL a) (HistoryAdjR a) m (NodeHash a)
@@ -88,21 +91,21 @@ setNodeHashToGr nh = do
 		let ngr = insNode (nn,hn)
 		adjSetEnv ngr (Identity ())
 	(mN2, mE2) <- getInfoHGr
-	when (not $ map.member psh mE2) $ do
-		gr <- adjGetEnv
-		let mn1 = Map.lookup nh mN2
-		let lhn = grtLastHesh nh
-		let mn2 = Map.lookup lhn mN2
-		mapM (\(x,y)-> do
-			adjSetEnv (insEdge (y,x,psh)) (Identity ())
-			) (do
-			n1 <- mn1
-			n2 <- mn2
-			return (n1,n2)
-			)
+	let mn1 = Map.lookup nh mN2
+	let lhn = getLastHesh nh
+	let mn2 = Map.lookup lhn mN2
+	mapM_ (\(x,y)-> do
+		grn <- adjGetEnv
+		when (not $ hasLEdge gtn (y,x,psh)) $ do 
+			adjSetEnv (insEdge (y,x,psh) grn) (Identity ())
+		) (do
+		n1 <- mn1
+		n2 <- mn2
+		return (n1,n2)
+		)
 
 stepMemoring :: (Monad m, MonadIO m, Hashable a, Eq a) => 
-  Int -> 
+  SizeSet -> 
   [Hashed a] -> 
   a -> 
   M.AdjointT (HGrAdjL a) (HGrAdjR a) m (NodeHash a)
@@ -110,10 +113,11 @@ stepMemoring i existHash nextA =
 	nh <- adjSnd $ generateNode i existHash nextA
 	adjFst $ setNodeHashToGr nh
 
-data Memored = Memored
+data Memored a = Memored
 	{ listMemored :: [Hashed a]
 	, setMemored :: PairSetH a
 	, lastHesh :: Hashed a
+	, nextHash :: Hashed a
 	, mising :: Int
 }
 
@@ -121,16 +125,17 @@ type MaxMising = Int
 
 type LMemored = [Memored]
 
-type MemAdjL = (Env LMemored) :.: (HGrAdjL a)
+type MemAdjL = (Env (LMemored a)) :.: (HGrAdjL a)
 
-type MemAdjR = (HGrAdjR a) :.: (Reader LMemored)
+type MemAdjR = (HGrAdjR a) :.: (Reader (LMemored a))
 
 upMemored :: (Monad m, Hashable a, Eq a) => 
 	MaxMising ->
-	M.AdjointT (HGrAdjL a) (HGrAdjR a) m [(PairSetH a, Hashed a)]
+	M.AdjointT (MemAdjL a) (MemAdjR a) m [(PairSetH a, Hashed a)]
 upMemored mm = do
 	vh <- adjSnd $ adjSnd $ adjSnd $ fmap hashed viewHistoryLeft
-	gri <- adjSnd $ getInfoHGr
+	gri <- adjSnd $ adjFst getInfoHGr
+	gr <- adjSnd $ adjFst adjGetEnv
 	lmem <- adjFst $ adjGetEnv
 	lmem2 <- mapM (\mem-> do
 		if member vh (fst $ setMemored mem) && not (member vh (snd $ setMemored mem))
@@ -139,12 +144,66 @@ upMemored mm = do
 		) lmem
 	lmem3 <- fmap catMaybes $ mapM (\mem->do
 		if ((mising mem) > mm || 
-			(P.length (listMemored mem) >= Set.size (fst $ setMemored mem)) ||
+			-- (P.length (listMemored mem) >= Set.size (fst $ setMemored mem)) ||
 			(member vh (snd $ setMemored mem))
 			)
 			then return Nothing
 			else return $ Just mm
 		) lmem2
-	r <- mapM (\mem->do
-		
-		) lmem3
+	let addLMem = foldMapWithKey (\k v-> fmap (\(x,y)->Memored [vh] k (lab' $ context gr x) (lab' $ context gr y) 0) v) $ snd gri
+	adjFst $ adjSetEnv (lmem3 ++ addLMem) (Identity ())
+	mapM (\mem->do
+		if vh == (lastHesh mem)
+			then if fromList (listMemored mem) == (fst $ setMemored mem)
+				then return (setMemored mem,nextHash mem)
+		) lmem2
+
+upadteMemored :: (Monad m, Hashable a, Eq a) => 
+	MaxMising ->
+	SizeSet -> 
+  [Hashed a] -> 
+  a -> 
+	M.AdjointT (MemAdjL a) (MemAdjR a) m [Bool]
+upadteMemored mm ss le a = do
+	lpshh <- upMemored mm
+	lb <- mapM (\(_,h)->
+		return $ h == (hashed a) 
+		) lpshh
+	when (P.null lb || not (or lb)) $ do
+		adjSnd $ stepMemoring ss le a
+	adjSnd $ adjSnd $ adjSnd $ addToLHistoryLeft a
+	return lb
+
+data DataMemored a = DMemored
+  { historyLength :: Int
+  , grDMemored :: (Gr (Hashed a) (PairSetH a))
+} deriving (Generic, ToJSON, FromJSON)
+
+getDataMemored :: (Monad m, Hashable a, Eq a) =>
+	M.AdjointT (MemAdjL a) (MemAdjR a) m (DataMemored a)
+getDataMemored = do
+	i <- adjSnd $ adjSnd $ adjFst $ adjGetEnv
+	gr <- adjSnd $ adjFst $ adjGetEnv
+	return $ DMemored i gr
+
+setDataMemored :: (Monad m, Hashable a, Eq a) =>
+	DataMemored a ->
+	M.AdjointT (MemAdjL a) (MemAdjR a) m ()
+setDataMemored dm = do
+	adjSnd $ adjSnd $ adjSnd $ emptyHistory
+	adjSnd $ adjSnd $ adjFst $ adjSetEnv (historyLength dm) (Identity ())
+	adjSnd $ adjFst $ adjSetEnv (grDMemored dm) (Identity ())
+	adjFst $ adjSetEnv [] (Identity ())
+
+{-}
+type HashForest a = Forest (PairSetH a, Hashed a)
+
+type FutuForestAdjL a = (Env (HashForest a)) :.: (MemAdjL a)
+
+type FutuForestAdjR a = (MemAdjR a) :.: (Reader (HashForest a))
+
+addCause :: (Monad m, Hashable a, Eq a) =>
+	[(PairSetH a, Hashed a)] -> 
+	M.AdjointT (Env (HashForest a)) (Reader (HashForest a)) m ()
+addCause = undefined
+-}
