@@ -31,6 +31,7 @@ import Control.Core.Biparam
 import Control.Core.Composition
 import Data.Functor.Identity
 import Data.History
+import Data.Adj.Graph
 
 data NodeHash a = NodeH (HashSet (Hashed a)) (HashSet (Hashed a)) (Hashed a) (Hashed a)
 
@@ -77,26 +78,6 @@ getLastHash (NodeH _ _ h _) = h
 getPairSetH :: NodeHash a -> PairSetH a
 getPairSetH (NodeH x y _ _) = (x,y)
 
-getInfoHGr ::(Monad m, Hashable a, Eq a) => 
-	M.AdjointT 
-		(Env (Gr (Hashed a) (PairSetH a))) 
-		(Reader (Gr (Hashed a) (PairSetH a))) 
-		m 
-		(HashMap (Hashed a) Node, HashMap (PairSetH a) [(Node,Node)])
-getInfoHGr = do
-	gr <- adjGetEnv
-	return $ ufold (\(lbnl,n,a,lbnr) (x,y)-> 
-			( x <> (Map.singleton a n)
-			, y <> 
-				( P.foldl (\ m1 m2 -> unionWith (P.++) m1 m2) Map.empty $ 
-					fmap (\ (b,n2) -> Map.singleton b [(n2,n)]) lbnl 
-				) <>
-				( P.foldl (\ m1 m2 -> unionWith (P.++) m1 m2) Map.empty $ 
-					fmap (\ (b,n2) -> Map.singleton b [(n,n2)]) lbnr
-				)
-			)
-		) (Map.empty, Map.empty) gr
-
 setNodeHashToGr :: (Monad m, Hashable a, Eq a) => 
 	NodeHash a ->
 	M.AdjointT 
@@ -126,49 +107,6 @@ setNodeHashToGr (nh :: NodeHash a) = do
 		n2 <- mn2
 		return (n1,n2)
 		)
-
-showGr :: (Monad m, Hashable a, Eq a, Show a) =>
-	M.AdjointT 
-		(Env (Gr (Hashed a) (PairSetH a))) 
-		(Reader (Gr (Hashed a) (PairSetH a))) 
-		m 
-		String
-showGr = do
-	gr <- adjGetEnv
-	return $ prettify gr
-
-getArtPoints :: (Monad m, Hashable a, Eq a, Show a) =>
-	M.AdjointT 
-		(Env (Gr (Hashed a) (PairSetH a))) 
-		(Reader (Gr (Hashed a) (PairSetH a))) 
-		m 
-		[Hashed a]
-getArtPoints = do
-	gr <- adjGetEnv
-	let lp = catMaybes $ fmap (\p-> G.lab gr p) $ G.ap gr
-	return lp
-
-getComponentsGr :: (Monad m, Hashable a, Eq a, Show a) =>
-	M.AdjointT 
-		(Env (Gr (Hashed a) (PairSetH a))) 
-		(Reader (Gr (Hashed a) (PairSetH a))) 
-		m 
-		[[Hashed a]]
-getComponentsGr = do
-	gr <- adjGetEnv
-	let lp = fmap catMaybes $ (fmap . fmap) (\p-> G.lab gr p) $ G.components gr
-	return lp 
-
-getSccGr :: (Monad m, Hashable a, Eq a, Show a) =>
-	M.AdjointT 
-		(Env (Gr (Hashed a) (PairSetH a))) 
-		(Reader (Gr (Hashed a) (PairSetH a))) 
-		m 
-		[[Hashed a]]
-getSccGr = do
-	gr <- adjGetEnv
-	let lp = fmap catMaybes $ (fmap . fmap) (\p-> G.lab gr p) $ G.scc gr
-	return lp 
 
 stepMemoring :: (Monad m, MonadIO m, Hashable a, Eq a) => 
   SizeSet -> 
