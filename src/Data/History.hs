@@ -46,6 +46,16 @@ viewHistoryRight = adjState (\ss -> case ss of
 	_ -> return (Nothing, ss)
 	)
 
+viewHPairLeft :: Monad m => M.AdjointT (Env (Seq a)) (Reader (Seq a)) m (Maybe (a,a))
+viewHPairLeft = do
+	ma1 <- getHistoryLeft
+	ma2 <- viewHistoryLeft
+	mapM addToHistoryLeft ma1
+	return $ do
+		a1 <- ma1
+		a2 <- ma2
+		return (a1,a2)
+
 getHistoryLength :: Monad m => M.AdjointT (Env (Seq a)) (Reader (Seq a)) m Int
 getHistoryLength = fmap Seq.length $ adjGetEnv 
 
@@ -83,3 +93,6 @@ addToLHistoryRight a = do
 	if b
 		then return Nothing
 		else adjSnd getHistoryLeft
+
+adjSeq :: M.AdjointT (Env (Seq a)) (Reader (Seq a)) m a -> M.AdjointT (HistoryAdjL a) (HistoryAdjR a) m a
+adjSeq = adjSnd

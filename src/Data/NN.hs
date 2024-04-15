@@ -132,11 +132,34 @@ trainAdjLD :: (Monad m, MonadIO m, Hashable a, Eq a) =>
 trainAdjLD p pe (x,y) i = do
 	trainAdj p pe $ P.replicate i (toLD x, toLD y)
 
+trainAdjLDL :: (Monad m, MonadIO m, Hashable a, Eq a) => 
+	(Double,Double) ->
+	(Double,Double) ->
+	[(a, a)] ->
+	Replicate ->
+	M.AdjointT 
+		AdjNetworkL 
+		AdjNetworkR
+		m 
+		()
+trainAdjLDL p pe lp i = do
+	trainAdj p pe $ fmap (\(x,y)-> (toLD x, toLD y)) lp
+
 type HashNN = Hash
 
 type NNGrAdjL a = (Env (Gr (Hashed a) HashNN)) :.: AdjNetworkL
 
 type NNGrAdjR a = AdjNetworkR :.: (Reader (Gr (Hashed a) HashNN))
+
+getSccArtPoint :: (Monad m, MonadIO m, Hashable a, Eq a) => 
+	M.AdjointT 
+		(NNGrAdjL a) 
+		(NNGrAdjR a)
+		m 
+		[Gr (Hashed a) HashNN]
+getSccArtPoint = do
+	gr <- adjFst $ adjGetEnv
+	return $ sccArtPoint gr
 
 getRandomElementList :: [a] -> IO (Maybe a)
 getRandomElementList la = do
@@ -186,8 +209,22 @@ updatingNNGr si = do
 
 type UpgradingInt = Int
 
+onlyScc :: (Monad m, MonadIO m, Hashable a, Eq a) => 
+	M.AdjointT 
+		(NNGrAdjL a) 
+		(NNGrAdjR a)
+		m 
+		()
+onlyScc = do
+	ln <- adjFst $ fmap join $ getSccGrNode
+	gr <- adjFst $ adjGetEnv
+	adjFst $ adjSetEnv (subgraph ln gr) (Identity ())
+
 upgradingNNGr :: (Monad m, MonadIO m, Hashable a, Eq a) => 
-	(a,a)
+	(Double,Double) ->
+	(Double,Double) ->
+	(a,a) ->
+	Replicate ->
 	SerchInt ->
 	UpgradingInt ->
 	M.AdjointT 
@@ -195,13 +232,24 @@ upgradingNNGr :: (Monad m, MonadIO m, Hashable a, Eq a) =>
 		(NNGrAdjR a)
 		m 
 		()
-upgradingNNGr si ui = do
+upgradingNNGr d1 d2 pa r si ui = do
+	adlSnd $ trainAdjLD d1 d2 pa r
 	mapM (\_-> do
-		ln <- adjFst $ fmap join $ getSccGrNode
-		gr <- adjFst $ adjGetEnv
-		adjFst $ adjSetEnv (subgraph ln gr) (Identity ())
+		onlyScc
 		updatingNNGr si
 		) [0..ui]
+
+onlyInGr :: (Monad m, MonadIO m, Hashable a, Eq a) => 
+	M.AdjointT 
+		(NNGrAdjL a) 
+		(NNGrAdjR a)
+		m 
+		()
+onlyInGr = do
+	gr <- adjFst $ adjGetEnv
+	let se = fold $ fmap (\(_,_,x)-> Set.singelton x) $ G.labEdges gr
+	ln <- adjSnd $ adjFst $ adjGetEnv
+	adjSnd $ adjFst $ adjSetEnv (P.filter (\n-> Set.member (hash $ packNetwork n) se) ln) (Identity ())
 
 type HashSccGr = Hash
 
@@ -218,6 +266,8 @@ safeNNScc :: (Monad m, MonadIO m, Hashable a, Eq a) =>
 		m 
 		()
 safeNNScc = do
+	adjSnd $ onlyScc
+	adjSnd $ onlyInGr
 	ln <- adjSnd $ adjSnd $ adjFst $ adjGetEnv
 	impnn <- fmap fold $ mapM (\n->do
 		let pnn = packNetwork n
@@ -226,6 +276,26 @@ safeNNScc = do
 	im <- adjFst $ adjGetEnv
 	adjFst $ adjSetEnv (IMap.union im impnn) (Identity ())
 
-type NNSccGrAdjL' a = (Env (Gr (Gr (Hashed a) HashNN) HashNN)) :.: AdjNetworkL
+type NNSccListAdjL a = (HistoryAdjL [(Gr (Hashed a) HashNN)]) :.: (NNPrimeAdjL a) 
 
-type NNSccGrAdjR' a = AdjNetworkR :.: (Reader (Gr (Gr (Hashed a) HashNN) HashNN))
+type NNSccListAdjR a = (NNPrimeAdjR a) :.: (HistoryAdjR [(Gr (Hashed a) HashNN)])
+
+addToHSccList :: (Monad m, MonadIO m, Hashable a, Eq a) => 
+	M.AdjointT 
+		(NNSccListAdjL a) 
+		(NNSccListAdjR a)
+		m 
+		()
+addToHSccList = do
+	lscc <- adjSnd getSccArtPoint
+	adjFst $ addToLHistoryLeft lscc
+
+generationNNSccListShort :: (Monad m, MonadIO m, Hashable a, Eq a) => 
+	M.AdjointT 
+		(NNSccListAdjL a) 
+		(NNSccListAdjR a)
+		m 
+		()
+generationNNSccListShort = do
+	
+ 

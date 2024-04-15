@@ -120,4 +120,12 @@ getSccGrGraph :: (Monad m, Hashable a, Eq a, Show a) =>
 getSccGrGraph = do
 	gr <- adjGetEnv
 	ln <- getSccGrNode
-	return $ (\l->subgraph l gr) ln
+	return $ fmap (\l->subgraph l gr) ln
+
+sccArtPoint :: Gr a b -> [Gr a b]
+sccArtPoint gr = (f $ P.foldr (\a b->G.delNode a b) gr artP)
+	where
+		f grn = join $ fmap (\l-> sccArtPoint $ subgraph l grn) lp
+			where
+				lp = G.scc grn
+		artP = G.ap gr
