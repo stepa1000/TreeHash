@@ -35,6 +35,7 @@ import Control.Core.Biparam
 import Control.Core.Composition
 import Data.Functor.Identity
 import Data.History
+import Data.Other.Utils
 
 getInfoHGr ::(Monad m, Hashable a, Hashable b, Eq a) => 
 	M.AdjointT 
@@ -129,3 +130,38 @@ sccArtPoint gr = (f $ P.foldr (\a b->G.delNode a b) gr artP)
 			where
 				lp = G.scc grn
 		artP = G.ap gr
+
+
+getTopsort :: (Monad m, Hashable a, Eq a, Show a) =>
+	M.AdjointT 
+		(Env (Gr a b)) 
+		(Reader (Gr a b)) 
+		m 
+		[a]
+getTopsort = do
+	gr <- adjGetEnv
+	return $ topsort' gr
+
+getDffA :: (Monad m, Hashable a, Eq a, Show a) =>
+	M.AdjointT 
+		(Env (Gr a b)) 
+		(Reader (Gr a b)) 
+		m 
+		[Tree a]
+getDffA = do
+	gr <- adjGetEnv
+	return $ dffWith' lab' 
+
+randomPath :: (Monad m, MonadIO m, Hashable a, Eq a, Show a) =>
+	Gr a b ->
+	m [a]
+randomPath ga = do
+	let ta = dffWith' lab' ga
+	f ta
+	where
+		f (Node a []) = return [a]
+		f (Node a lta) = do
+			mrta <- liftIO $ getRandomElementList lta
+			mlra <- fmap (join . maybeToList) $ mapM f mrta
+			return $ a : mra
+

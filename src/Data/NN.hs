@@ -37,6 +37,7 @@ import Control.Core.Composition
 import Data.Functor.Identity
 import Data.History
 import Data.NodeHash
+import Data.Other.Utils
 
 type Hash = Int
 
@@ -119,7 +120,16 @@ calculateAdjLD a = do
 	lhld <- calculateAdj $ toLD a
 	return $ fmap (\(h,ld) -> (h, fmap (\x-> fromLD x a) ld)) lhld
 
-trainAdjLD :: (Monad m, MonadIO m, Hashable a, Eq a) => 
+calculateAdjLDL :: (Monad m, MonadIO m, ListDoubled a) => 
+	[a] ->
+	M.AdjointT 
+		AdjNetworkL 
+		AdjNetworkR
+		m
+		[[(HashNN,a)]]
+calculateAdjLDL = mapM calculateAdjLD
+
+trainAdjLD :: (Monad m, MonadIO m, Hashable a, ListDoubled a, Eq a) => 
 	(Double,Double) ->
 	(Double,Double) ->
 	(a, a) ->
@@ -132,7 +142,7 @@ trainAdjLD :: (Monad m, MonadIO m, Hashable a, Eq a) =>
 trainAdjLD p pe (x,y) i = do
 	trainAdj p pe $ P.replicate i (toLD x, toLD y)
 
-trainAdjLDL :: (Monad m, MonadIO m, Hashable a, Eq a) => 
+trainAdjLDL :: (Monad m, MonadIO m, Hashable a, ListDoubled a, Eq a) => 
 	(Double,Double) ->
 	(Double,Double) ->
 	[(a, a)] ->
@@ -150,7 +160,7 @@ type HashNN = Hash
 type NNGrAdjL a = (Env (Gr (Hashed a) HashNN)) :.: AdjNetworkL
 
 type NNGrAdjR a = AdjNetworkR :.: (Reader (Gr (Hashed a) HashNN))
-
+  
 getSccArtPoint :: (Monad m, MonadIO m, Hashable a, Eq a) => 
 	M.AdjointT 
 		(NNGrAdjL a) 
@@ -160,15 +170,6 @@ getSccArtPoint :: (Monad m, MonadIO m, Hashable a, Eq a) =>
 getSccArtPoint = do
 	gr <- adjFst $ adjGetEnv
 	return $ sccArtPoint gr
-
-getRandomElementList :: [a] -> IO (Maybe a)
-getRandomElementList la = do
-	let l = P.length la
-	i <- randomRIO (0,l)
-	return $ la !? i
-
-getRELs :: Int -> [a] -> IO [a]
-getRELs i la = fmap catMaybes $ mapM (\_-> getRandomElementList la) [0..i]
 
 upNNGr :: (Monad m, MonadIO m, Hashable a, Eq a) => 
 	M.AdjointT 
@@ -234,6 +235,9 @@ upgradingNNGr :: (Monad m, MonadIO m, Hashable a, Eq a) =>
 		()
 upgradingNNGr d1 d2 pa r si ui = do
 	adlSnd $ trainAdjLD d1 d2 pa r
+	gr <- adjFst $ adjGetEnv
+	adjFst $ adjSetEnv 
+		(foldr (\i b->insNode (i,snd pa) b) gr $ newNodes 1 gr) (Identity ())
 	mapM (\_-> do
 		onlyScc
 		updatingNNGr si
@@ -290,18 +294,64 @@ addToHSccList = do
 	lscc <- adjSnd getSccArtPoint
 	adjFst $ addToLHistoryLeft lscc
 
-generationNNSccListShort :: (Monad m, MonadIO m, Hashable a, Eq a) => 
+newtype ShortDL a = ShortDL a
+
+unShortDL (ShortDL a) = a
+
+type SizeNNShort = Int
+
+type SizeNNRePrime = Int
+
+restorationNNSccLPrimer :: (Monad m, MonadIO m, Hashable a, ListDoubled (ShortDL a),Eq a) => 
+	(Double,Double) ->
+	(Double,Double) ->
+	(a,a) ->
 	M.AdjointT 
 		(NNSccListAdjL a) 
 		(NNSccListAdjR a)
 		m 
-		()
-generationNNSccListShort = do
+		[HashNN]
+restorationNNSccLPrimer p pe pa = do
+	mlgr <- adjFst $ viewHistoryLeft
+	let lgr = join $ maybeToList mlgr
+	mgr <- liftIO $ getRandomElementList lgr
+	rp <- fmap (join . maybeToList) $ mapM randomPath mgr
+	let plrp = pairing rp
+	adjSnd $ adjSnd $ trainAdjLDL p pe plrp
+	lr <- adjSnd $ adjSnd $ calculateAdjLD $ fst pa
+	let fl = P.filter (\(h,a)->a == (snd pa)) lr
+	return $ fmap fst fl
+
+generationNNSccListShort :: (Monad m, MonadIO m, Hashable a, ListDoubled (ShortDL a),Eq a) => 
+	(Double,Double) ->
+	(Double,Double) ->
+	SizeNNShort ->
+	M.AdjointT 
+		(NNSccListAdjL a) 
+		(NNSccListAdjR a)
+		m 
+		[Bool]
+generationNNSccListShort p pe snns = do
 	mp <- adjFst $ viewHPairLeft
 	mapM (\(xl,yl)-> do
 		mx <- liftIO $ getRandomElementList xl
 		my <- liftIO $ getRandomElementList yl
-		
+		mapM (\(x,y)-> do
+			let xtop = topsort' x
+			let ytop = topsort' y
+			let ptop = P.zip xtop ytop
+			adjSnd $ adjSnd $ creatRandomNetworksAdj_ snns
+			adjSnd $ adjSnd $ trainAdjLDL p pe ptop
+			llr <- adjSnd $ adjSnd $ calculateAdjLDL xtop
+			return $ 
+				foldl 
+					(\b (lx,y)-> and [b,and $ fmap ((== y) . snd) lx]) 
+					True $ 
+				P.zip llr ytop
+			) $ do
+			x <- mx
+			y <- my
+			return (x,y)
 		) mp
 
  
