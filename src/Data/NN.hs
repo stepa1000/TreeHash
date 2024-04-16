@@ -297,5 +297,11 @@ generationNNSccListShort :: (Monad m, MonadIO m, Hashable a, Eq a) =>
 		m 
 		()
 generationNNSccListShort = do
-	
+	mp <- adjFst $ viewHPairLeft
+	mapM (\(xl,yl)-> do
+		mx <- liftIO $ getRandomElementList xl
+		my <- liftIO $ getRandomElementList yl
+		
+		) mp
+
  
