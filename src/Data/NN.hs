@@ -49,8 +49,18 @@ type AdjNetworkL = (Env LNetwork) :.: (Env Layers)
 
 type AdjNetworkR = (Reader Layers) :.: (Reader LNetwork) 
 
+lnnull :: (Monad m, MonadIO m) => 
+	M.AdjointT 
+		AdjNetworkL 
+		AdjNetworkR
+		m
+		Bool
+lnnull = fmap P.null $ adjFst $ adjGetEnv
+
+type SizeNN = Int
+
 creatRandomNetworksAdj :: (Monad m, MonadIO m) => 
-	Int ->
+	SizeNN ->
 	M.AdjointT 
 		AdjNetworkL 
 		AdjNetworkR
@@ -322,6 +332,40 @@ restorationNNSccLPrimer p pe pa = do
 	let fl = P.filter (\(h,a)->a == (snd pa)) lr
 	return $ fmap fst fl
 
+type RestorationCycle = Int 
+
+restorationNNSccLPrimerUp :: (Monad m, MonadIO m, Hashable a, ListDoubled (ShortDL a),Eq a) => 
+	(Double,Double) ->
+	(Double,Double) ->
+	(a,a) ->
+	RestorationCycle ->
+	SizeNN ->
+	Replicate ->
+	SerchInt ->
+	UpgradingInt ->
+	M.AdjointT 
+		(NNSccListAdjL a) 
+		(NNSccListAdjR a)
+		m 
+		(HashSet HashNN)
+restorationNNSccLPrimerUp p pe pa rc snn r si ui = do
+	hnn <- fmap fold $ mapM (\_-> do
+		b <- adjSnd $ adjSnd $ lnnull
+		hnn <- restorationNNSccLPrimer p pe pa
+		when (b || (P.null hnn)) $ do
+			adjSnd $ adjSnd $ creatRandomNetworksAdj_ snn
+			adjSnd $ adjFst $ adjSetEnv G.empty (Identity ())
+			adjSnd $ upgradingNNGr p pe pa r si ui
+		return (Set.singelton hnn)
+		) [0..rc]
+	adjSnd $ onlyInGr
+	when (not $ Set.null hnn) $ do 
+		gr <- adjSnd $ adjFst $ adjGetEnv
+		adjSnd $ adjFst $ adjSetEnv G.empty (Identity ())
+		addToHSccList
+		adjSnd $ safeNNScc
+	return hnn
+
 generationNNSccListShort :: (Monad m, MonadIO m, Hashable a, ListDoubled (ShortDL a),Eq a) => 
 	(Double,Double) ->
 	(Double,Double) ->
@@ -354,4 +398,31 @@ generationNNSccListShort p pe snns = do
 			return (x,y)
 		) mp
 
- 
+restorationGoGeneration :: (Monad m, MonadIO m, Hashable a, ListDoubled (ShortDL a),Eq a) => 
+	(Double,Double) ->
+	(Double,Double) ->
+	(a,a) ->
+	RestorationCycle ->
+	SizeNN ->
+	Replicate ->
+	SerchInt ->
+	UpgradingInt ->
+	SizeNNShort ->
+	M.AdjointT 
+		(NNSccListAdjL a) 
+		(NNSccListAdjR a)
+		m 
+		(HashSet HashNN, [Bool])
+restorationGoGeneration p pe pa rc snn r si ui snns = do
+	hs <- restorationNNSccLPrimerUp p pe pa rc snn r si ui
+	lb <- generationNNSccListShort p pe snns
+	return (hs,lb)
+
+type HashShortNN = Hash
+
+type IntMapShortNN = IntMap ([[PackedNeuron]],[HashSccGr])
+
+type NNShortAdjL a = (Env IntMapShortNN) :.: (NNSccListAdjL a)
+
+type NNShortAdjR a = (NNSccListAdjR a) :.: (Reader IntMapShortNN)
+
