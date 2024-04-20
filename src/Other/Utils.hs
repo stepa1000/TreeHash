@@ -36,6 +36,14 @@ import Control.Core.Composition
 import Data.Functor.Identity
 import Data.History
 
+metric :: [[PackedNeuron]] -> [[PackedNeuron]] -> Double
+metric llpn1 llpn2 = 
+	sum $
+	fmap sum $
+	(fmap . fmap) sum $
+	(fmap . fmap . fmap) (\(x,y)-> abs $ x - y) $ 
+	P.zipWith (P.zipWith P.zip) llpn1 llpn2
+
 getRandomElementList :: [a] -> IO (Maybe a)
 getRandomElementList la = do
 	let l = P.length la
