@@ -573,7 +573,7 @@ restorationNNSccLPrimerUpSafe impngr =
 		) impngr
 	adjFst $ addToLHistoryLeft lgr
 	adjSnd $ adjSnd $ adjFst $ adjSetEnv G.empty (Identity ())
-
+{-}
 type ShortLayers = Layers
 
 generationNNSccListShort :: (Monad m, MonadIO m, Hashable a, ListDoubled (ShortDL a),Eq a) => 
@@ -617,13 +617,6 @@ generationNNSccListShort p pe sl snns = do
 		) mp
 	adjSnd $ adjSnd $ adjSnd $ adjSnd $ adjSetEnv pl (Identity ())
 	return lb
-
-{-}
-type IntMapSccNN = IntMap [HashNN] -- Prime
-
-type IMSccAdjL a = (Env IntMapSccNN) :.: (NNPrimeAdjL a)
-
-type IMSccAdjR a = (NNPrimeAdjR a) :.: (Reader IntMapSccNN)
 -}
 
 type NNSLPowAdjL f a = (NNSccListAdjL (Gr (Hashed a) HashNN)) :.: f -- (NNSccListAdjL a) 
@@ -663,12 +656,12 @@ restorationPow ::
 	UpgradingInt ->
 	M.AdjointT f g m ()
 restorationPow p pe rc snn r si ui = do
-	mlhl <- liftNNSccListAdjA $ adjNNSLliftHAG $ viewHistoryLeft
-	mlhgr <- liftNNSccListAdjGr $ adjNNSLliftHAG $ viewHistoryLeft
+	mplhl <- liftNNSccListAdjA $ adjNNSLliftHAG $ viewHPairLeft -- viewHistoryLeft
+	--mlhgr <- liftNNSccListAdjGr $ adjNNSLliftHAG $ viewHistoryLeft
 	mapM (\(xl,yl)-> do
 		let lp = join $ fmap (\y->fmap (\x->(x,y)) xl) yl
 		limpngr <- mapM (\plgr->do 
-			liftNNSccListAdjGr $ restorationNNSccLPrimerUp' p pe plgr rc snn r si ui
+			liftNNSccListAdjGr $ restorationNNSccLPrimerUp' p pe plgr rc snn r si ui -- ???
 			) lp
 			return (x,y)
 		impngr <- if not (P.null limpngr) 
@@ -691,9 +684,10 @@ restorationPow p pe rc snn r si ui = do
 			liftNNSccListAdjGr $ restorationNNSccLPrimerUpSafe r
 			) mr
 		) $ do
-			lx <- mlhgr
-			ly <- mlhl
-			return (join $ fmap topsort' lx,ly) -- ???!!!
+			(lx,ly) <- mplhl
+			--lx <- mlhgr
+			--ly <- mlhl
+			return (lx,ly) --v join $ fmap topsort'
 
 restorationPowUp :: 
 	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a,
@@ -724,11 +718,14 @@ assumption' ::
 	M.AdjointT f g m 
 		[(HashNNGr,(Gr (Hashed a) HashNN),(Gr (Hashed a) HashNN))] -- (Gr (Hashed a) HashNN))
 assumption' = do
-	lmgr <- liftNNSccListAdjGr $ adjNNSLliftHAG $ viewHistoryLeft -- liftNNSccListAdjGr $ 
-	fmap (join . maybeToList) $ mapM (\gr->do
-		hgr <- liftNNSccListAdjGr $ adjNNSLliftIntMapPrimeNN $ safeCalculate gr
-		return $ fmap (\(h,g)->(h,gr,h)) hgr
-		) (join $ fmap topsort' lmgr)
+	-- lmgr <- liftNNSccListAdjGr $ adjNNSLliftHAG $ viewHistoryLeft -- liftNNSccListAdjGr $ 
+	lmgr <- liftNNSccListAdjA $ adjNNSLliftHAG $ viewHistoryLeft
+	fmap (join . maybeToList) $ mapM (\lgr->do
+		mapM (\gr->do
+			hgr <- liftNNSccListAdjGr $ adjNNSLliftIntMapPrimeNN $ safeCalculate gr
+			return $ fmap (\(h,g)->(h,gr,g)) hgr
+			) lgr
+		) lmgr -- (join $ fmap topsort' lmgr)
 
 assumptionRestoration :: 
 	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a,
@@ -765,63 +762,187 @@ assumptionRestorationUp ::
 	(Double,Double) ->
 	(Double,Double) ->
 	a ->
+	SizeNN ->
+	Replicate ->
+	SerchInt ->
+	UpgradingInt ->
 	SizeAssumptionRestoration -> 
 	[(HashNNGr,(Gr (Hashed a) HashNN),(Gr (Hashed a) HashNN))] ->
 	M.AdjointT f g m 
-		(HashMap a ([(Gr (Hashed a) HashNN,Gr (Hashed a) HashNN,HashNNGr)],[HashNN]))
-		--(IntMap ([[PackedNeuron]],[Gr (Hashed a) HashNN]))
-		--[(Gr (Hashed a) HashNN),[[PackedNeuron]],HashNN,a)] -- !!!
-assumptionRestorationUp p pe a sar lhgr = do
+		(HashMap a ([(Gr (Hashed a) HashNN,Gr (Hashed a) HashNN, [[PackedNeuron]])],[HashNN]))
+assumptionRestorationUp p pe pa snn r si ui sar lhgr = do
 	-- like restorationNNSccLPrimerUp'
-	mapM (\_->do
+	fmap f $ mapM (\_->do
 		b <- liftNNSccListAdjA $ adjNNSLliftLN $ lnnull
-		lhscchnn <- liftNNSccListAdjA $ assumptionRestoration p pe a
+		-- lhgr <- assumption'
+		lhscchnn <- liftNNSccListAdjA $ assumptionRestoration p pe a lhgr
 		when (b || (P.null lhscchnn)) $ do
 			liftNNSccListAdjA $ adjNNSLliftAdjNetworkL $ creatRandomNetworksAdj_ snn
-			liftNNSccListAdjA $ adjNNSLliftNNGr $ adjSetEnv G.empty (Identity ())
-			-- liftNNSccListAdjA $ adjNNSLliftNNGr $ upgradingNNGr p pe pa r si ui -- ??
-		fmap (unionScc . catMaybes) $ mapM (\(gr1,gr2,hgr,hnn,x)->do
-			let n = packNetwork hnn
-			return (Map.singelton x (n,hscc))
+			-- liftNNSccListAdjA $ adjNNSLliftNNGr $ adjSetEnv G.empty (Identity ()) -- ???
+			-- liftNNSccListAdjA $ adjNNSLliftNNGr $ upgradingNNGr p pe pa r si ui -- ??? 
+			-- because assumption
+		fmap (f . catMaybes) $ mapM (\(gr1,gr2,hgr,hnn,x)->do
+			nn <- liftNNSccListAdjGr $ getNN hgr
+			let n = packNetwork nn
+			return (Map.singelton x ([(gr1,gr2,n)],[hnn]))
 			) lhscchnn
 		) [0..sar]
-
+	where
+		f = foldr (Map.unionWith (\(x1,y1) (x2,y2)->(x1++x2,y1++y2))) Map.empty
 
 resultAssumption :: Hashable a =>
-	[(Gr (Hashed a) HashNN,Gr (Hashed a) HashNN),HashNNGr,HashNN,a)] ->
-	HashMap a ([(Gr (Hashed a) HashNN,Gr (Hashed a) HashNNGr,HashNN)],[HashNN])
+	[(Gr (Hashed a) HashNN,Gr (Hashed a) HashNN, [[PackedNeuron]])] ->
+	HashMap a ([(Gr (Hashed a) HashNN,Gr (Hashed a) HashNN, [[PackedNeuron]])],[HashNN])
 resultAssumption = unionRA . fmap (\(gr,rh,h,a) -> Map.singleton a ([(gr,rh)],[h]))
 	where
 		unionRA = foldr (Map.unionWith (\(x1,y1) (x2,y2)->(x1++x2,y1++y2))) Map.empty
 
 resultAssumptionTrue :: Eq a =>
 	a ->
-	HashMap a ([((Gr (Hashed a) HashNN))],[HashNN])
-	-> HashMap a ([((Gr (Hashed a) HashNN))],[HashNN])
+	HashMap a ([(Gr (Hashed a) HashNN,Gr (Hashed a) HashNN),[[PackedNeuron]])],[HashNN]) ->
+	HashMap a ([(Gr (Hashed a) HashNN,Gr (Hashed a) HashNN),[[PackedNeuron]])],[HashNN])
 resultAssumptionTrue a hm = Map.filterWithKey (\k _ -> k == a) hm
 
 type ReasonGr a = Gr (Hashed a) HashNN
 
 type ConsequenceGr a = Gr (Hashed a) HashNN
 
-type MapGr = HashMap (ReasonGr a) ([ConsequenceGr a],[HashNN])
+type MapGr a = HashMap (ReasonGr a) [(ConsequenceGr a,HashNNGr)] -- HashA ?
 
-type MapGrAdjL f a = (Env MapGr) :.: f -- (NNSccListAdjL a) 
+type MapGrAdjL f a = (Env (MapGr a)) :.: f -- (NNSccListAdjL a) 
 
-type MapGrAdjR g a = g :.: (Reader MapGr) -- (NNSccListAdjR a)
+type MapGrAdjR g a = g :.: (Reader (MapGr a)) -- (NNSccListAdjR a)
 
+type HashSccR = HashScc
 
+type HashSccC = HashScc
 
-{-
-	mapM (\_-> do
-		(hx,hy,_) <- adjNNSLliftNNSccListAdjL $ generationNNSccListShort p pe sl snns
-		ln <- adjNNSLliftLN adjGetEnv
-		im <- adjFst $ adjGetEnv
-		fmap (foldr (IMap.unionWith (\(x1,y1) (_,y2)->(x1,y1++y2))) Map.empty) $ 
-			mapM (\n->do
-				let pnn = packNetwork n
-				return $ IMap.singleton (hash pnn) (pnn,[(hx,hy)])
-				) ln
-		) [0.. sg]
-}
--}
+safeTrueAssumptuon :: 
+	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a,
+		-- NNSccListAdj f g a
+	) =>
+	a ->
+	HashMap a ([(Gr (Hashed a) HashNN,Gr (Hashed a) HashNN),[[PackedNeuron]])],[HashNN]) ->
+	M.AdjointT (Env (MapGr a)) (Reader (MapGr a)) m (IntMap [(HashSccR,HashSccC)])
+safeTrueAssumptuon ta hma = do
+	let thma = resultAssumptionTrue ta hma
+	fmap f $ mapM (\ (lgrp, _) -> do
+		fmap f $ mapM (\ (gr1, gr2,nngr) -> do 
+			mgr <- adjGetEnv
+			let mgr' = Map.insertWith (++) gr1 [(gr2,hash nngr)]
+			adjSetEnv mgr' (Identity ())
+			return $ IMap.singleton (hash nngr) [(hash gr1, hash gr2)]
+			) lgrp
+		) thma
+	where
+		f = foldr (IMap.unionWith (\y1 y2->y1++y2) IMap.empty
+
+class ClassMapGrAdj f g a where
+	liftMapGrAdj :: (Monad m, Hashable a, Eq a) =>
+		M.AdjointT  (Env (MapGr a)) (Reader (MapGr a)) m b ->
+		M.AdjointT f g m b
+
+memoriAssumption :: 
+	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a,
+		ClassNNSLPowAdj f g a, ClassMapGrAdj f g a
+	) => 
+	M.AdjointT f g m [(ConsequenceGr a,HashNNGr)]
+memoriAssumption = do
+	lmgr <- liftNNSccListAdjA $ adjNNSLliftHAG $ viewHistoryLeft
+	mgr <- liftMapGrAdj $ adjGetEnv
+	fmap (join . maybeToList) $ mapM (\lgr->do
+		fmap (join . catMaybes) $ mapM (\gr->do
+			mlch <- Map.lookup gr mgr
+			return mlch
+			) lgr
+		) lmgr
+
+type IMapNNRC = IntMap [(HashSccR,HashSccC)]
+
+type IMapNNRCAdjL f = (Env IMapNNRC) :.: f -- (NNSccListAdjL a) 
+
+type IMapNNRCAdjR g = g :.: (Reader IMapNNRC) -- (NNSccListAdjR a)
+
+safeTrueAssumptuonNNRC :: 
+	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a,
+		-- NNSccListAdj f g a
+	) =>
+	IntMap [(HashSccR,HashSccC)] ->
+	M.AdjointT (Env IMapNNRC) (Reader IMapNNRC) m (IntMap [(HashSccR,HashSccC)])
+safeTrueAssumptuonNNRC imnnrc = do
+	imrc <- adjGetEnv
+	let imrc' = Map.unionWith (++) imrc imnnrc
+	adjSetEnv imrc' (Identity ())
+
+class ClassIMapNNRAdj f g where
+	liftIMapNNRAdj :: (Monad m, Hashable a, Eq a) =>
+		M.AdjointT (Env IMapNNRC) (Reader IMapNNRC) m b ->
+		M.AdjointT f g m b
+
+safeTrueAssumptuonFull :: 
+	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a,
+		ClassNNSLPowAdj f g a, ClassMapGrAdj f g a, ClassIMapNNRAdj f g
+	) => 
+	a ->
+	HashMap a (([(Gr (Hashed a) HashNN,Gr (Hashed a) HashNN),[[PackedNeuron]])],[HashNN]) ->
+	M.AdjointT f g m ()
+safeTrueAssumptuonFull ta hma = do
+	o <- liftMapGrAdj $ safeTrueAssumptuon ta hma
+	liftIMapNNRAdj $ safeTrueAssumptuonNNRC o
+
+type AllResult a = 
+	HashMap a (([(Gr (Hashed a) HashNN,Gr (Hashed a) HashNN),[[PackedNeuron]])],[HashNN])
+
+type ConsequenceResult a = 
+	HashMap a (([(Gr (Hashed a) HashNN,Gr (Hashed a) HashNN),[[PackedNeuron]])],[HashNN])
+
+updateAssumptionPre :: 
+	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a,
+		ClassNNSLPowAdj f g a, ClassMapGrAdj f g a, ClassIMapNNRAdj f g
+	) => 
+	(Double,Double) ->
+	(Double,Double) ->
+	a ->
+	SizeNN ->
+	Replicate ->
+	SerchInt ->
+	UpgradingInt ->
+	SizeAssumptionRestoration -> 
+	M.AdjointT f g m 
+		( AllResult a
+		, ConsequenceResult a
+		)
+updateAssumptionPre p pe a snn r si ui sar = do
+	lhngr <- assumption'
+	hmagr <- assumptionRestorationUp p pe a snn r si ui sar lhngr
+	lc <- memoriAssumption
+	return 
+		( hmagr
+		, Map.filter 
+			(\(lgr,_)-> or $ 
+				fmap (\(grr,grc,pn)-> isJust $ P.lookup (hash grc) lc) lgr
+			) 
+			hmagr
+		)
+
+updateAssumptionPost :: 
+	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a,
+		ClassNNSLPowAdj f g a, ClassMapGrAdj f g a, ClassIMapNNRAdj f g
+	) => 
+	(Double,Double) ->
+	(Double,Double) ->
+	(a,a) ->
+	SizeNN ->
+	Replicate ->
+	SerchInt ->
+	UpgradingInt ->
+	SizeAssumptionRestoration -> 
+	( AllResult a
+	, ConsequenceResult a
+	) ->
+	M.AdjointT f g m 
+		( AllResult a
+		, ConsequenceResult a
+		)
+updateAssumptionPost p pe pa snn r si ui sar pr = do
+	restorationPowUp p pe pa snn r si ui sar
