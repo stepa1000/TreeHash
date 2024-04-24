@@ -39,6 +39,7 @@ import Data.Functor.Identity
 import Data.History
 import Data.NodeHash
 import Data.Other.Utils
+import Class.Logger
 
 type Hash = Int
 
@@ -146,7 +147,6 @@ calculateAdj ld = do
 	let lc = fmap (\n-> calculate n ld) lnold
 	retrun $ P.zip lh lc
 
--- (Monad m, MonadIO m, Hashable a, Eq a) => 
 class ListDoubled a where
 	toLD :: a -> [[Double]]
 	fromLD :: [Double] -> a -> a
@@ -163,9 +163,6 @@ calculateAdjLD a = do
 	let llhEa = (fmap . fmap) (\(h,ld)->(h,Endo $ fromLD ld)) llhld
 	let lha = foldr1 f llhEa
 	return $ fmap (\(h,ea)->(h,(appEndo ea) a)) lha
-	--mapM (\lhld-> do
-	--	return $ foldr (\(h,ld)) (_,b)-> (h, fmap (\x-> fromLD x b) ld) ) (undefined,a) lhld
-	---	) llhld
 	where
 		f xl yl = fmap g $ P.zip xl yl
 		g = (\((hx,ax),(hy,ay))->
@@ -573,57 +570,19 @@ restorationNNSccLPrimerUpSafe impngr =
 		) impngr
 	adjFst $ addToLHistoryLeft lgr
 	adjSnd $ adjSnd $ adjFst $ adjSetEnv G.empty (Identity ())
-{-}
-type ShortLayers = Layers
-
-generationNNSccListShort :: (Monad m, MonadIO m, Hashable a, ListDoubled (ShortDL a),Eq a) => 
-	(Double,Double) ->
-	(Double,Double) ->
-	ShortLayers ->
-	SizeNNShort ->
-	M.AdjointT 
-		(NNSccListAdjL a) 
-		(NNSccListAdjR a)
-		m 
-		(HashScc,HashScc,[Bool])
-generationNNSccListShort p pe sl snns = do
-	pl <- adjSnd $ adjSnd $ adjSnd $ adjSnd adjGetEnv
-	adjSnd $ adjSnd $ adjSnd $ adjSnd $ adjSetEnv sl (Identity ())
-	mp <- adjFst $ viewHPairLeft
-	lb <- fmap join $ mapM (\(xl,yl)-> do
-		mx <- liftIO $ getRandomElementList xl
-		my <- liftIO $ getRandomElementList yl
-		lb <- mapM (\(x,y)-> do
-			let xtop = topsort' x
-			let ytop = topsort' y
-			let ptop = P.zip xtop ytop
-			adjSnd $ adjSnd $ adjSnd $ creatRandomNetworksAdj_ snns
-			adjSnd $ adjSnd $ adjSnd $ trainAdjLDL p pe (pointSDL ptop)
-			llr <- adjSnd $ adjSnd $ adjSnd $ calculateAdjLDL (ShortDL xtop)
-			return $ 
-				foldl 
-					(\b (lx,y)-> and [b,and $ fmap ((== y) . snd) lx]) 
-					True $ 
-				P.zip llr (ShortDL ytop)
-			) $ do
-			x <- mx
-			y <- my
-			return (x,y)
-		return (do
-			x <- mx
-			y <- my
-			lb' <- lb
-			return (x,y,lb'))
-		) mp
-	adjSnd $ adjSnd $ adjSnd $ adjSnd $ adjSetEnv pl (Identity ())
-	return lb
--}
 
 type NNSLPowAdjL f a = (NNSccListAdjL (Gr (Hashed a) HashNN)) :.: f -- (NNSccListAdjL a) 
 
 type NNSLPowAdjR g a = g :.: (NNSccListAdjR (Gr (Hashed a) HashNN)) -- (NNSccListAdjR a)
 
---adjNNSLPowliftNNSccListAdjL = 
+instance ListDoubled a => ListDoubled (Gr (Hashed a) HashNN) where
+	-- toLD :: a -> [[Double]]
+	toDl a = ufold (\(_,i,v,_) c-> (fmap (\ld-> (fromIntegral i):ld), toDl v) ++ c ) [] a
+	-- fromLD :: [Double] -> a -> a
+	fromLD (di:ld) gr = maybe gr id $
+		fmap (\(ladj,i,a,radj)-> insert (ladj,i,fromLD ld a,radj) gr') mc
+		where
+			(mc,gr') <- match (round di) gr
 
 class ClassNNSLPowAdj f g a where
 	liftNNSccListAdjGr :: (Monad m, Hashable a, Eq a) =>
@@ -717,6 +676,7 @@ assumption' ::
 	) =>
 	M.AdjointT f g m 
 		[(HashNNGr,(Gr (Hashed a) HashNN),(Gr (Hashed a) HashNN))] -- (Gr (Hashed a) HashNN))
+		-- just Gr (Hashed a) ()
 assumption' = do
 	-- lmgr <- liftNNSccListAdjGr $ adjNNSLliftHAG $ viewHistoryLeft -- liftNNSccListAdjGr $ 
 	lmgr <- liftNNSccListAdjA $ adjNNSLliftHAG $ viewHistoryLeft
@@ -769,38 +729,41 @@ assumptionRestorationUp ::
 	SizeAssumptionRestoration -> 
 	[(HashNNGr,(Gr (Hashed a) HashNN),(Gr (Hashed a) HashNN))] ->
 	M.AdjointT f g m 
-		(HashMap a ([(Gr (Hashed a) HashNN,Gr (Hashed a) HashNN, [[PackedNeuron]])],[HashNN]))
+		(HashMap a ([(Gr (Hashed a) HashNN,Gr (Hashed a) HashNN, HashNNGr,[[[PackedNeuron]]])]))
 assumptionRestorationUp p pe pa snn r si ui sar lhgr = do
 	-- like restorationNNSccLPrimerUp'
+	liftNNSccListAdjA $ adjNNSLliftAdjNetworkL $ creatRandomNetworksAdj_ snn
 	fmap f $ mapM (\_->do
 		b <- liftNNSccListAdjA $ adjNNSLliftLN $ lnnull
 		-- lhgr <- assumption'
 		lhscchnn <- liftNNSccListAdjA $ assumptionRestoration p pe a lhgr
-		when (b || (P.null lhscchnn)) $ do
+		when (b || (P.null lhscchnn)) $ do -- evretime False
 			liftNNSccListAdjA $ adjNNSLliftAdjNetworkL $ creatRandomNetworksAdj_ snn
 			-- liftNNSccListAdjA $ adjNNSLliftNNGr $ adjSetEnv G.empty (Identity ()) -- ???
 			-- liftNNSccListAdjA $ adjNNSLliftNNGr $ upgradingNNGr p pe pa r si ui -- ??? 
 			-- because assumption
 		fmap (f . catMaybes) $ mapM (\(gr1,gr2,hgr,hnn,x)->do
-			nn <- liftNNSccListAdjGr $ getNN hgr
+			nn <- liftNNSccListAdjA $ adjNNSLliftLN $ getNN hgr
 			let n = packNetwork nn
-			return (Map.singelton x ([(gr1,gr2,n)],[hnn]))
+			return (Map.singelton x ([(gr1,gr2,hgr,[n])]))
 			) lhscchnn
 		) [0..sar]
 	where
-		f = foldr (Map.unionWith (\(x1,y1) (x2,y2)->(x1++x2,y1++y2))) Map.empty
-
+		f = foldr (Map.unionWith (\l1 l2-> l1 ++ l2
+			) Map.empty
+		-- foldr (Map.unionWith (\(x1) (x2)->(x1++x2,y1++y2))) Map.empty
+{-}
 resultAssumption :: Hashable a =>
 	[(Gr (Hashed a) HashNN,Gr (Hashed a) HashNN, [[PackedNeuron]])] ->
 	HashMap a ([(Gr (Hashed a) HashNN,Gr (Hashed a) HashNN, [[PackedNeuron]])],[HashNN])
 resultAssumption = unionRA . fmap (\(gr,rh,h,a) -> Map.singleton a ([(gr,rh)],[h]))
 	where
 		unionRA = foldr (Map.unionWith (\(x1,y1) (x2,y2)->(x1++x2,y1++y2))) Map.empty
-
+-}
 resultAssumptionTrue :: Eq a =>
 	a ->
-	HashMap a ([(Gr (Hashed a) HashNN,Gr (Hashed a) HashNN),[[PackedNeuron]])],[HashNN]) ->
-	HashMap a ([(Gr (Hashed a) HashNN,Gr (Hashed a) HashNN),[[PackedNeuron]])],[HashNN])
+	HashMap a ([(Gr (Hashed a) HashNN,Gr (Hashed a) HashNN, HashNNGr,[[[PackedNeuron]]])]) ->
+	HashMap a ([(Gr (Hashed a) HashNN,Gr (Hashed a) HashNN, HashNNGr,[[[PackedNeuron]]])])
 resultAssumptionTrue a hm = Map.filterWithKey (\k _ -> k == a) hm
 
 type ReasonGr a = Gr (Hashed a) HashNN
@@ -817,30 +780,35 @@ type HashSccR = HashScc
 
 type HashSccC = HashScc
 
-safeTrueAssumptuon :: 
-	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a,
-		-- NNSccListAdj f g a
-	) =>
-	a ->
-	HashMap a ([(Gr (Hashed a) HashNN,Gr (Hashed a) HashNN),[[PackedNeuron]])],[HashNN]) ->
-	M.AdjointT (Env (MapGr a)) (Reader (MapGr a)) m (IntMap [(HashSccR,HashSccC)])
-safeTrueAssumptuon ta hma = do
-	let thma = resultAssumptionTrue ta hma
-	fmap f $ mapM (\ (lgrp, _) -> do
-		fmap f $ mapM (\ (gr1, gr2,nngr) -> do 
-			mgr <- adjGetEnv
-			let mgr' = Map.insertWith (++) gr1 [(gr2,hash nngr)]
-			adjSetEnv mgr' (Identity ())
-			return $ IMap.singleton (hash nngr) [(hash gr1, hash gr2)]
-			) lgrp
-		) thma
-	where
-		f = foldr (IMap.unionWith (\y1 y2->y1++y2) IMap.empty
-
 class ClassMapGrAdj f g a where
 	liftMapGrAdj :: (Monad m, Hashable a, Eq a) =>
 		M.AdjointT  (Env (MapGr a)) (Reader (MapGr a)) m b ->
 		M.AdjointT f g m b
+
+safeTrueAssumptuon :: 
+	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a,
+		NNSccListAdj f g a, ClassMapGrAdj f g a
+	) =>
+	a ->
+	HashMap a ([(Gr (Hashed a) HashNN,Gr (Hashed a) HashNN, HashNNGr,[[[PackedNeuron]]])]) ->
+	M.AdjointT f g m (IntMap [(HashSccR,HashSccC)])
+safeTrueAssumptuon ta hma = do
+	let thma = resultAssumptionTrue ta hma
+	fmap f $ mapM (\l->
+		fmap f $ mapM (\ (gr1, gr2, nngr, lpn) -> do
+			mgr <- liftMapGrAdj $ adjGetEnv
+			let mgr' = Map.insertWith (++) gr1 [(gr2,hash nngr)]
+			liftMapGrAdj $ adjSetEnv mgr' (Identity ())
+			mapM_ (\pn->do
+				im <- liftNNSccListAdjA $ adjNNSLliftIntMapPrimeNN $ adjGetEnv
+				let im' = IMap.insertWith (\(x1,y1) (_,y2)->(x1,y1++y2)) knn (pn,[hash gr2])
+				liftNNSccListAdjA $ adjNNSLliftIntMapPrimeNN $ adjSetEnv im' (Identity ())
+				) lpn
+			return $ IMap.singleton (hash nngr) [(hash gr1, hash gr2)]
+			) l
+		) thma
+	where
+		f = foldr (IMap.unionWith (\y1 y2->y1++y2) IMap.empty
 
 memoriAssumption :: 
 	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a,
@@ -868,7 +836,7 @@ safeTrueAssumptuonNNRC ::
 		-- NNSccListAdj f g a
 	) =>
 	IntMap [(HashSccR,HashSccC)] ->
-	M.AdjointT (Env IMapNNRC) (Reader IMapNNRC) m (IntMap [(HashSccR,HashSccC)])
+	M.AdjointT (Env IMapNNRC) (Reader IMapNNRC) m ()
 safeTrueAssumptuonNNRC imnnrc = do
 	imrc <- adjGetEnv
 	let imrc' = Map.unionWith (++) imrc imnnrc
@@ -898,7 +866,8 @@ type ConsequenceResult a =
 
 updateAssumptionPre :: 
 	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a,
-		ClassNNSLPowAdj f g a, ClassMapGrAdj f g a, ClassIMapNNRAdj f g
+		ClassNNSLPowAdj f g a, ClassMapGrAdj f g a, ClassIMapNNRAdj f g,
+		MonadLoger m
 	) => 
 	(Double,Double) ->
 	(Double,Double) ->
@@ -913,9 +882,12 @@ updateAssumptionPre ::
 		, ConsequenceResult a
 		)
 updateAssumptionPre p pe a snn r si ui sar = do
+	lift $ logInfoM "Start: updateAssumptionPre"
 	lhngr <- assumption'
 	hmagr <- assumptionRestorationUp p pe a snn r si ui sar lhngr
 	lc <- memoriAssumption
+	lift $ logInfoM $ "Assumption size: " .< (P.length lhngr)
+	lift $ logInfoM "End: updateAssumptionPre"
 	return 
 		( hmagr
 		, Map.filter 
@@ -945,4 +917,92 @@ updateAssumptionPost ::
 		, ConsequenceResult a
 		)
 updateAssumptionPost p pe pa snn r si ui sar pr = do
+	safeTrueAssumptuonFull (snd pa) (fst pr)
 	restorationPowUp p pe pa snn r si ui sar
+
+data ConfNN = ConfNN 
+	{ confLRA :: (Double,Double)
+	, confMEE :: (Double,Double)
+	, confSNN :: SizeNN
+	, confReplication :: Replicate
+	, confSerchInt :: SerchInt
+	, confUpgradingInt :: UpgradingInt
+	, confSAR :: SizeAssumptionRestoration
+} deriving (Generic, ToJSON, FromJSON)
+
+type ConfNNAdjL f = (Env ConfNN) :.: f -- (NNSccListAdjL a) 
+
+type ConfNNAdjR g = g :.: (Reader ConfNN) -- (NNSccListAdjR a)
+
+class ClassConfNNAdj f g where
+	liftConfNNAdj :: (Monad m, Hashable a, Eq a) =>
+		M.AdjointT (Env ConfNN) (Reader ConfNN) m b ->
+		M.AdjointT f g m b
+
+getConfNN :: (Monad m, Hashable a, Eq a, ClassConfNNAdj f g) =>
+	M.AdjointT f g m ConfNN
+getConfNN = liftConfNNAdj $ adjGetEnv
+
+setConfNN :: (Monad m, Hashable a, Eq a) =>
+	ConfNN ->
+	M.AdjointT f g m ()
+setConfNN dm = do
+	liftConfNNAdj $ adjSetEnv dm (Identity ())
+
+data DataNN = DataNN
+	{ nnLayers :: Layers
+	, nnMap :: IntMapPrimeNN
+} deriving (Generic, ToJSON, FromJSON)
+
+getDataNN :: (Monad m, Hashable a, Eq a, ClassConfNNAdj f g) =>
+	M.AdjointT 
+		(NNSccListAdjL a) 
+		(NNSccListAdjR a)
+		m 
+		DataNN
+getDataNN = do 
+	l <- adjNNSLliftLayers $ adjGetEnv
+	im <- adjNNSLliftIntMapPrimeNN $ adjGetEnv
+	return $ DataNN l im
+
+setDataNN :: (Monad m, Hashable a, Eq a) =>
+	DataNN ->
+	M.AdjointT 
+		(NNSccListAdjL a) 
+		(NNSccListAdjR a)
+		m 
+		()
+setDataNN dm = do
+	l <- adjNNSLliftLayers $ adjSetEnv (nnLayers dm) (Identity ())
+	im <- adjNNSLliftIntMapPrimeNN $ adjSetEnv (nnMap dm) (Identity ())
+
+data DataNNSLPow a = DataNNSLPow
+	{ dnnGr :: DataNN
+	, dnnA :: DataNN
+	, hmrcgr :: MapGr a
+	, imrcnn :: IMapNNRC
+} deriving (Generic, ToJSON, FromJSON)
+
+getDataNNSLPow :: 
+	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a,
+		ClassNNSLPowAdj f g a, ClassMapGrAdj f g a, ClassIMapNNRAdj f g
+	) => 
+	M.AdjointT f g m DataNNSLPow
+getDataNNSLPow = do 
+	dnngr <- liftNNSccListAdjGr $ adjGetEnv
+	dnna <- liftNNSccListAdjA $ adjGetEnv
+	mgr <- liftMapGrAdj $ adjGetEnv
+	im <- liftIMapNNRAdj $ adjGetEnv
+	return $ DataNNSLPow dnngr dnna mgr im
+
+setDataNNSLPow :: 
+	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a,
+		ClassNNSLPowAdj f g a, ClassMapGrAdj f g a, ClassIMapNNRAdj f g
+	) => 
+	DataNNSLPow ->
+	M.AdjointT f g m ()
+setDataNNSLPow dm = do
+	liftNNSccListAdjGr $ adjSetEnv (dnnGr dm) (Identity ())
+	liftNNSccListAdjA $ adjSetEnv (dnnA dm) (Identity ())
+	liftMapGrAdj $ adjSetEnv (hmrcgr dm) (Identity ())
+	liftIMapNNRAdj $ adjSetEnv (imrcnn dm) (Identity ())
