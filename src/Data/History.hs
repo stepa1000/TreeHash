@@ -72,6 +72,15 @@ type HistoryAdjL a = (Env Int) :.: (Env (Seq a))
 
 type HistoryAdjR a = (Reader (Seq a)) :.: (Reader Int)
 
+runHistoryfst :: 
+	Int -> 
+	Seq a -> 
+	M.AdjointT (HistoryAdjL a :.: f) (g :.: HistoryAdjR a) m b ->
+	M.AdjointT f g ()
+runHistoryfst i s a = void .
+	runAdjT s .
+
+
 hitoryCheckLengthLimit :: Monad m => M.AdjointT (HistoryAdjL a) (HistoryAdjR a) m Bool
 hitoryCheckLengthLimit = do
 	lengthSeq <- adjSnd getHistoryLength

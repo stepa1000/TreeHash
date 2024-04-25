@@ -109,3 +109,9 @@ startlTNN :: MVar String -> SettingNN -> AdjunctorNN a ()
 startlTNN mvs spw = do
 	(Just dm1) <- lift $ decodeFileStrict (fileNNForState spw) 
 	setDataNNSLPow dm1
+
+runAdjunctorNN = void .
+	runAdjT [] .
+	runAdjTfst [] .  
+	runAdjTfst G.empty .
+	runAdjTfst IMap.empty .

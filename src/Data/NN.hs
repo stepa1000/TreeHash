@@ -571,7 +571,7 @@ restorationNNSccLPrimerUpSafe impngr =
 	adjFst $ addToLHistoryLeft lgr
 	adjSnd $ adjSnd $ adjFst $ adjSetEnv G.empty (Identity ())
 
-type PowGr a = Gr (Hashed a) [[PackedNeuron]]
+type PowGr a = Gr a [[PackedNeuron]]
 
 type NNSLPowAdjL f a = (NNSccListAdjL (PowGr a) :.: f -- (NNSccListAdjL a) 
 
@@ -585,9 +585,9 @@ instance ListDoubled [[PackedNeuron]] where
 						((fromIntegral x):
 						((fromIntegral y):
 						((fromIntegral z):
-						d))) $ P.zip [0..] ld) l)
+						d)))) $ P.zip [0..] ld) l)
 		$ P.zip [0..] $ fmap (P.zip [0..]) a
-	fromLD (x:y:z:d) a = toxy (round x) (round y) (round z) a
+	fromLD (x:y:z:dl) a = toxy (round x) (round y) (round z) a
 		where 
 			toxy x y z l
 				| x > 0 && not (P.null l) = (P.head l) : (toxy (x-1) y z (P.tail l))
@@ -599,25 +599,55 @@ instance ListDoubled [[PackedNeuron]] where
 				| y > 0 && P.null l = [] : (toy (y-1) z l)
 				| y == 0 && not (P.null l) = (toz z (P.head l)) : (P.tail l)
 				| y == 0 && P.null l = toz z []
-			toy z l 
+			toz z l 
 				| z > 0 = && not (P.null l) = (P.head l) : (toz (z - 1) (P.tail l)) 
 				| z > 0 && P.null l = [] : (toz (z-1) l)
-				| z == 0 && not (P.null l) = b : (P.tail l)
-				| z == 0 && P.null l = [b]
+				| z == 0 && not (P.null l) = (P.head dl) : (P.tail l)
+				| z == 0 && P.null l = [P.head dl]
 
 instance ListDoubled a => ListDoubled (PowGr a) where
 	-- toLD :: a -> [[Double]]
 	toDl a = ufold 
 		(\(adjL,i,v,adjR) c-> 
-			(fmap (\ld-> 0:((fromIntegral i):ld)) $ toDl v) ++
-			(fmap (\(ld,n)-> 1:((fromIntegral n):ld)) $ P.zip (toDL fmap fst adjL) (fmap snd adjL)
+			(fmap (\ld-> 0:((fromIntegral i):(0:(addLengthV v ld)))) $ toDl v) ++
+			(join $ fmap (\(ld,n)-> 1:
+				((fromIntegral i):
+				((fromIntegral n):
+				(addLengthPN v ld)))) $ 
+					P.zip (fmap (toDL . fst) adjL) (fmap snd adjL)) ++
+			(join $ fmap (\(ld,n)-> 2:
+				((fromIntegral i):
+				((fromIntegral n):
+				(addLengthPN v ld)))) $ 
+					P.zip (fmap (toDL . fst) adjR) (fmap snd adjLR)) ++
 			c 
 			) [] a
-	-- fromLD :: [Double] -> a -> a
-	fromLD (di:ld) gr = maybe gr id $
-		fmap (\(ladj,i,a,radj)-> insert (ladj,i,fromLD ld a,radj) gr') mc
 		where
-			(mc,gr') <- match (round di) gr
+			addLengthPN v lpn
+				| (lle v) > 4 = lpn ++ (P.replicate ((lle v) - 4) 0)
+			addLengthPN _ lpn = lpn
+			addLengthV v l 
+				| (lle v) < 4 = l ++ (P.replicate (4 - (lle v)) 0)
+			addLengthV _ l = l
+			lle v = foldr1 (\x y-> 
+				if x == y 
+					then x 
+					else error "ListDoubled a not eq"
+				) $ fmap P.length $ toDl v
+	-- fromLD :: [Double] -> a -> a
+	fromLD (i:di:dj:ld) gr = case i of 
+			0 -> maybe gr id $
+				fmap (\(ladj,i,a,radj)-> G.insert (ladj,i,fromLD ld a,radj) gr') mc
+			1 -> maybe gr id $
+				fmap (\(ladj,i,a,radj)-> G.insert (f (round dj) ladj,i,a,radj) gr') mc
+			2 -> maybe gr id $
+				fmap (\(ladj,i,a,radj)-> G.insert (ladj,i,a,f (round dj) radj) gr') mc
+		where
+			f j l = (maybeToList $ fmap (\(x,y)-> (fromLD ld x,y)) md) ++ l'
+				where
+					md = listToMaybe $ P.filter (\(d,i)->i == j) l
+					l' = P.filter (\(d,i)->i /= j) l
+			(mc,gr') = match (round di) gr
 
 class ClassNNSLPowAdj f g a where
 	liftNNSccListAdjGr :: (Monad m, Hashable a, Eq a) =>

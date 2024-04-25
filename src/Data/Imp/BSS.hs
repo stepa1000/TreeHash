@@ -129,11 +129,7 @@ grShowToFIleIO fp fpap fpcp fpscp spw = runPW $
 runStartLTM :: SettingPWord -> IO ()
 runStartLTM spw = do
 	mvs <- newEmptyMVar 
-	forkIO $ void $ 
-		runAdjT Seq.empty $
-		runAdjTfst 0 $ 
-		runAdjTfst G.empty $ 
-		runAdjTfst [] $ 
+	forkIO $ runPW $ 
 		startLTM' mvs spw
 	str <- P.getLine
 	f mvs str
