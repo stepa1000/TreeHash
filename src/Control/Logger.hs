@@ -104,3 +104,12 @@ instance Monad m => MonadLoger (M.AdjointT AdjLogL AdjLogR m) where
     sl <- adjFst $ adjGetEnv
     ll <- adjSnd $ adjGetEnv
     adjFst $ adjSetEnv (sl ++ "/n" ++ (logError ll str)) (Identity ())
+
+instance (MonadIO m, Traversable f) => MonadIO (M.AdjointT f g m) where
+  liftIO = lift . liftIO
+
+instance (MonadLoger m, Traversable f) => MonadLoger (M.AdjointT f g m) where
+  logDebugM = lift . logDebugM
+  logInfoM = lift . logInfoM
+  logWarningM = lift . logWarningM
+  logErrorM = lift . logErrorM

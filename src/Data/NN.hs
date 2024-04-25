@@ -571,13 +571,48 @@ restorationNNSccLPrimerUpSafe impngr =
 	adjFst $ addToLHistoryLeft lgr
 	adjSnd $ adjSnd $ adjFst $ adjSetEnv G.empty (Identity ())
 
-type NNSLPowAdjL f a = (NNSccListAdjL (Gr (Hashed a) HashNN)) :.: f -- (NNSccListAdjL a) 
+type PowGr a = Gr (Hashed a) [[PackedNeuron]]
 
-type NNSLPowAdjR g a = g :.: (NNSccListAdjR (Gr (Hashed a) HashNN)) -- (NNSccListAdjR a)
+type NNSLPowAdjL f a = (NNSccListAdjL (PowGr a) :.: f -- (NNSccListAdjL a) 
 
-instance ListDoubled a => ListDoubled (Gr (Hashed a) HashNN) where
+type NNSLPowAdjR g a = g :.: (NNSccListAdjR (PowGr a) -- (NNSccListAdjR a)
+
+instance ListDoubled [[PackedNeuron]] where
+	toDl a = join $ fmap 
+			(\(x,l)-> 
+				fmap (\(y,ld)-> 
+					fmap (\(z,d)->
+						((fromIntegral x):
+						((fromIntegral y):
+						((fromIntegral z):
+						d))) $ P.zip [0..] ld) l)
+		$ P.zip [0..] $ fmap (P.zip [0..]) a
+	fromLD (x:y:z:d) a = toxy (round x) (round y) (round z) a
+		where 
+			toxy x y z l
+				| x > 0 && not (P.null l) = (P.head l) : (toxy (x-1) y z (P.tail l))
+				| x > 0 && P.null l = [] : (toxy (x-1) y z l)
+				| x == 0 && not (P.null l) = (toy y z (P.head l)) : (P.tail)
+				| x == 0 && P.null l = toy y z []
+			toy y z l 
+				| y > 0 = && not (P.null l) = (P.head l) : (toy (y - 1) z (P.tail l)) 
+				| y > 0 && P.null l = [] : (toy (y-1) z l)
+				| y == 0 && not (P.null l) = (toz z (P.head l)) : (P.tail l)
+				| y == 0 && P.null l = toz z []
+			toy z l 
+				| z > 0 = && not (P.null l) = (P.head l) : (toz (z - 1) (P.tail l)) 
+				| z > 0 && P.null l = [] : (toz (z-1) l)
+				| z == 0 && not (P.null l) = b : (P.tail l)
+				| z == 0 && P.null l = [b]
+
+instance ListDoubled a => ListDoubled (PowGr a) where
 	-- toLD :: a -> [[Double]]
-	toDl a = ufold (\(_,i,v,_) c-> (fmap (\ld-> (fromIntegral i):ld), toDl v) ++ c ) [] a
+	toDl a = ufold 
+		(\(adjL,i,v,adjR) c-> 
+			(fmap (\ld-> 0:((fromIntegral i):ld)) $ toDl v) ++
+			(fmap (\(ld,n)-> 1:((fromIntegral n):ld)) $ P.zip (toDL fmap fst adjL) (fmap snd adjL)
+			c 
+			) [] a
 	-- fromLD :: [Double] -> a -> a
 	fromLD (di:ld) gr = maybe gr id $
 		fmap (\(ladj,i,a,radj)-> insert (ladj,i,fromLD ld a,radj) gr') mc
@@ -587,8 +622,8 @@ instance ListDoubled a => ListDoubled (Gr (Hashed a) HashNN) where
 class ClassNNSLPowAdj f g a where
 	liftNNSccListAdjGr :: (Monad m, Hashable a, Eq a) =>
 		M.AdjointT 
-			(NNSccListAdjL (Gr (Hashed a) HashNN)) 
-			(NNSccListAdjR (Gr (Hashed a) HashNN))
+			(NNSccListAdjL (PowGr a) 
+			(NNSccListAdjR (PowGr a)
 			m 
 			b ->
 		M.AdjointT f g m b
@@ -675,7 +710,7 @@ assumption' ::
 		ClassNNSLPowAdj f g a
 	) =>
 	M.AdjointT f g m 
-		[(HashNNGr,(Gr (Hashed a) HashNN),(Gr (Hashed a) HashNN))] -- (Gr (Hashed a) HashNN))
+		[(HashNNGr,PowGr a,PowGr a)] -- (Gr (Hashed a) HashNN))
 		-- just Gr (Hashed a) ()
 assumption' = do
 	-- lmgr <- liftNNSccListAdjGr $ adjNNSLliftHAG $ viewHistoryLeft -- liftNNSccListAdjGr $ 
@@ -694,14 +729,14 @@ assumptionRestoration ::
 	(Double,Double) ->
 	(Double,Double) ->
 	a ->
-	[(HashNNGr,(Gr (Hashed a) HashNN),(Gr (Hashed a) HashNN))] ->
+	[(HashNNGr,PowGr a,PowGr a)] ->
 	M.AdjointT 
 		(NNSccListAdjL a) 
 		(NNSccListAdjR a)
 		-- (NNSLPowAdjL f a) 
 		-- (NNSLPowAdjR g a)
 		m 
-		[(Gr (Hashed a) HashNN),(Gr (Hashed a) HashNN),HashNNGr,HashNN,a)] -- !!!
+		[(PowGr a,PowGr a,HashNNGr,HashNN,a)] -- !!!
 assumptionRestoration p pe a lhgr = do
 	-- like restorationNNSccLPrimer
 	mrhgr <- liftIO $ getRandomElementList lhgr
@@ -727,9 +762,9 @@ assumptionRestorationUp ::
 	SerchInt ->
 	UpgradingInt ->
 	SizeAssumptionRestoration -> 
-	[(HashNNGr,(Gr (Hashed a) HashNN),(Gr (Hashed a) HashNN))] ->
+	[(HashNNGr,PowGr a,PowGr a)] ->
 	M.AdjointT f g m 
-		(HashMap a ([(Gr (Hashed a) HashNN,Gr (Hashed a) HashNN, HashNNGr,[[[PackedNeuron]]])]))
+		(HashMap a ([(PowGr a,PowGr a, HashNNGr,[[[PackedNeuron]]])]))
 assumptionRestorationUp p pe pa snn r si ui sar lhgr = do
 	-- like restorationNNSccLPrimerUp'
 	liftNNSccListAdjA $ adjNNSLliftAdjNetworkL $ creatRandomNetworksAdj_ snn
@@ -752,23 +787,16 @@ assumptionRestorationUp p pe pa snn r si ui sar lhgr = do
 		f = foldr (Map.unionWith (\l1 l2-> l1 ++ l2
 			) Map.empty
 		-- foldr (Map.unionWith (\(x1) (x2)->(x1++x2,y1++y2))) Map.empty
-{-}
-resultAssumption :: Hashable a =>
-	[(Gr (Hashed a) HashNN,Gr (Hashed a) HashNN, [[PackedNeuron]])] ->
-	HashMap a ([(Gr (Hashed a) HashNN,Gr (Hashed a) HashNN, [[PackedNeuron]])],[HashNN])
-resultAssumption = unionRA . fmap (\(gr,rh,h,a) -> Map.singleton a ([(gr,rh)],[h]))
-	where
-		unionRA = foldr (Map.unionWith (\(x1,y1) (x2,y2)->(x1++x2,y1++y2))) Map.empty
--}
+
 resultAssumptionTrue :: Eq a =>
 	a ->
 	HashMap a ([(Gr (Hashed a) HashNN,Gr (Hashed a) HashNN, HashNNGr,[[[PackedNeuron]]])]) ->
 	HashMap a ([(Gr (Hashed a) HashNN,Gr (Hashed a) HashNN, HashNNGr,[[[PackedNeuron]]])])
 resultAssumptionTrue a hm = Map.filterWithKey (\k _ -> k == a) hm
 
-type ReasonGr a = Gr (Hashed a) HashNN
+type ReasonGr a = PowGr a
 
-type ConsequenceGr a = Gr (Hashed a) HashNN
+type ConsequenceGr a = PowGr a
 
 type MapGr a = HashMap (ReasonGr a) [(ConsequenceGr a,HashNNGr)] -- HashA ?
 
@@ -786,15 +814,18 @@ class ClassMapGrAdj f g a where
 		M.AdjointT f g m b
 
 safeTrueAssumptuon :: 
-	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a,
-		NNSccListAdj f g a, ClassMapGrAdj f g a
+	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a, Show a
+		NNSccListAdj f g a, ClassMapGrAdj f g a, MonadLoger m
 	) =>
 	a ->
-	HashMap a ([(Gr (Hashed a) HashNN,Gr (Hashed a) HashNN, HashNNGr,[[[PackedNeuron]]])]) ->
+	HashMap a ([(PowGr a,PowGr a, HashNNGr,[[[PackedNeuron]]])]) ->
 	M.AdjointT f g m (IntMap [(HashSccR,HashSccC)])
 safeTrueAssumptuon ta hma = do
+	lift $ logInfoM "Start: safeTrueAssumptuon"
+	lift $ logInfoM $ "true value: " .< ta
 	let thma = resultAssumptionTrue ta hma
-	fmap f $ mapM (\l->
+	hm <- fmap f $ mapM (\l-> do
+		lift $ logInfoM "safe assumptions"
 		fmap f $ mapM (\ (gr1, gr2, nngr, lpn) -> do
 			mgr <- liftMapGrAdj $ adjGetEnv
 			let mgr' = Map.insertWith (++) gr1 [(gr2,hash nngr)]
@@ -807,6 +838,8 @@ safeTrueAssumptuon ta hma = do
 			return $ IMap.singleton (hash nngr) [(hash gr1, hash gr2)]
 			) l
 		) thma
+	lift $ logInfoM "End: safeTrueAssumptuon"
+	return hm
 	where
 		f = foldr (IMap.unionWith (\y1 y2->y1++y2) IMap.empty
 
@@ -849,20 +882,21 @@ class ClassIMapNNRAdj f g where
 
 safeTrueAssumptuonFull :: 
 	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a,
-		ClassNNSLPowAdj f g a, ClassMapGrAdj f g a, ClassIMapNNRAdj f g
+		ClassNNSLPowAdj f g a, ClassMapGrAdj f g a, ClassIMapNNRAdj f g,
+		MonadLoger m
 	) => 
 	a ->
 	HashMap a (([(Gr (Hashed a) HashNN,Gr (Hashed a) HashNN),[[PackedNeuron]])],[HashNN]) ->
 	M.AdjointT f g m ()
 safeTrueAssumptuonFull ta hma = do
-	o <- liftMapGrAdj $ safeTrueAssumptuon ta hma
+	o <- safeTrueAssumptuon ta hma
 	liftIMapNNRAdj $ safeTrueAssumptuonNNRC o
 
 type AllResult a = 
-	HashMap a (([(Gr (Hashed a) HashNN,Gr (Hashed a) HashNN),[[PackedNeuron]])],[HashNN])
+	HashMap a ([PowGr a,PowGr a, HashNNGr,[[[PackedNeuron]]])])
 
 type ConsequenceResult a = 
-	HashMap a (([(Gr (Hashed a) HashNN,Gr (Hashed a) HashNN),[[PackedNeuron]])],[HashNN])
+	HashMap a ([PowGr a,PowGr a, HashNNGr,[[[PackedNeuron]]])])
 
 updateAssumptionPre :: 
 	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a,
@@ -899,7 +933,8 @@ updateAssumptionPre p pe a snn r si ui sar = do
 
 updateAssumptionPost :: 
 	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a,
-		ClassNNSLPowAdj f g a, ClassMapGrAdj f g a, ClassIMapNNRAdj f g
+		ClassNNSLPowAdj f g a, ClassMapGrAdj f g a, ClassIMapNNRAdj f g,
+		MonadLoger m
 	) => 
 	(Double,Double) ->
 	(Double,Double) ->
@@ -912,10 +947,7 @@ updateAssumptionPost ::
 	( AllResult a
 	, ConsequenceResult a
 	) ->
-	M.AdjointT f g m 
-		( AllResult a
-		, ConsequenceResult a
-		)
+	M.AdjointT f g m ()
 updateAssumptionPost p pe pa snn r si ui sar pr = do
 	safeTrueAssumptuonFull (snd pa) (fst pr)
 	restorationPowUp p pe pa snn r si ui sar
@@ -949,6 +981,52 @@ setConfNN :: (Monad m, Hashable a, Eq a) =>
 setConfNN dm = do
 	liftConfNNAdj $ adjSetEnv dm (Identity ())
 
+updateAPre :: 
+	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a,
+		ClassNNSLPowAdj f g a, ClassMapGrAdj f g a, ClassIMapNNRAdj f g,
+		MonadLoger m
+	) =>
+	a -> 
+	M.AdjointT f g m 
+		( AllResult a
+		, ConsequenceResult a
+		)
+updateAPre a = do
+	cnn <- getConfNN
+	updateAssumptionPre 
+		(confLRA cnn)
+		(confMEE cnn)
+		a
+		(confSNN cnn)
+		(confReplication cnn)
+		(confSerchInt cnn)
+		(confUpgradingInt cnn)
+		(confSAR cnn)
+
+updateAPost :: 
+	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a,
+		ClassNNSLPowAdj f g a, ClassMapGrAdj f g a, ClassIMapNNRAdj f g,
+		MonadLoger m
+	) =>
+	(a,a) -> 
+	( AllResult a
+	, ConsequenceResult a
+	) ->
+	M.AdjointT f g m ()
+updateAPost pa pr = do
+	cnn <- getConfNN
+	updateAssumptionPost 
+		(confLRA cnn)
+		(confMEE cnn)
+		pa
+		(confSNN cnn)
+		(confReplication cnn)
+		(confSerchInt cnn)
+		(confUpgradingInt cnn)
+		(confSAR cnn)
+		pr
+
+
 data DataNN = DataNN
 	{ nnLayers :: Layers
 	, nnMap :: IntMapPrimeNN
@@ -981,6 +1059,7 @@ data DataNNSLPow a = DataNNSLPow
 	, dnnA :: DataNN
 	, hmrcgr :: MapGr a
 	, imrcnn :: IMapNNRC
+	, nnslpConf :: ConfNN
 } deriving (Generic, ToJSON, FromJSON)
 
 getDataNNSLPow :: 
@@ -993,7 +1072,8 @@ getDataNNSLPow = do
 	dnna <- liftNNSccListAdjA $ adjGetEnv
 	mgr <- liftMapGrAdj $ adjGetEnv
 	im <- liftIMapNNRAdj $ adjGetEnv
-	return $ DataNNSLPow dnngr dnna mgr im
+	c <- liftConfNNAdj $ adjGetEnv
+	return $ DataNNSLPow dnngr dnna mgr im c
 
 setDataNNSLPow :: 
 	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a,
@@ -1006,3 +1086,4 @@ setDataNNSLPow dm = do
 	liftNNSccListAdjA $ adjSetEnv (dnnA dm) (Identity ())
 	liftMapGrAdj $ adjSetEnv (hmrcgr dm) (Identity ())
 	liftIMapNNRAdj $ adjSetEnv (imrcnn dm) (Identity ())
+	liftConfNNAdj $ adjSetEnv (nnslpConf dm) (Identity ())

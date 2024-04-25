@@ -75,16 +75,7 @@ initEmptyGraph spw = do
 	case m of
 		(Right (Just _)) -> return ()
 		_ -> encodeFile @(DataMemored PWord) (fileForState spw) $ DMemored 11 G.empty
-{-}
-startLTM :: SettingPWord -> AdjunctorPWord Bool
-startLTM spw = do
-	(Just dm1) <- lift $ decodeFileStrict (fileForState spw) 
-	setDataMemored dm1
-	bsffr <- lift $ B.readFile (fileForRead spw) 
-	lernToMemory $ bsToPW bsffr
-	dm2 <- getDataMemored
-	lift $ encodeFile (fileForState spw) dm2
--}
+
 startLTM' :: MVar String -> SettingPWord -> AdjunctorPWord ()
 startLTM' mvs spw = do
 	setDataMemoredToAdjPWord spw
