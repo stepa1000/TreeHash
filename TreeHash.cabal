@@ -25,11 +25,15 @@ source-repository head
 
 library
   exposed-modules:
+      Control.Logger
+      Data.Adj.Graph
       Data.History
       Data.Imp.BSS
+      Data.Imp.NNS
       Data.NN
       Data.NodeHash
       Lib
+      Other.Utils
   other-modules:
       Paths_TreeHash
   autogen-modules:
@@ -47,6 +51,7 @@ library
     , comonad
     , containers
     , fgl
+    , fgl-visualize
     , hashable
     , mtl
     , random
@@ -73,6 +78,7 @@ executable TreeHash-exe
     , comonad
     , containers
     , fgl
+    , fgl-visualize
     , hashable
     , mtl
     , random
@@ -100,6 +106,7 @@ test-suite TreeHash-test
     , comonad
     , containers
     , fgl
+    , fgl-visualize
     , hashable
     , mtl
     , random

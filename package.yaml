@@ -28,6 +28,7 @@ dependencies:
 - mtl
 - comonad
 - fgl
+- fgl-visualize
 - hashable
 - unordered-containers
 - aeson

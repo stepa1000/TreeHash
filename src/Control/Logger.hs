@@ -87,6 +87,17 @@ type AdjLogL = (Env String) :.: (Env LogLevel)
 
 type AdjLogR = (Reader LogLevel) :.: (Reader String) 
 
+writeLog :: (Monad m, MonadIO m) =>
+  FilePath ->
+  M.AdjointT 
+    AdjLogL
+    AdjLogR
+    m ()
+writeLog fp =
+  str <- adjFst $ adjGetEnv
+  liftIO $ writeFile fp str
+  adjFst $ adjSetEnv "" (Identity ())
+
 instance Monad m => MonadLoger (M.AdjointT AdjLogL AdjLogR m) where
   logDebugM str = do
     sl <- adjFst $ adjGetEnv

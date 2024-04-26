@@ -7,7 +7,7 @@
 module Data.NN where
 
 import Prelude as P
-import Data.Sequence as Seq
+import Data.Sequence as Seq 
 import System.Random
 import Data.Hashable
 import Data.HashSet as Set

@@ -31,6 +31,16 @@ import Data.Imp.BSS
 
 main :: IO ()
 main = do
+	initNNS snn
+	runLTNN snn
+
+snn = SettingNN
+	"data/PEPN.fb2"
+	"data/StateNN.json"
+	"data/Log.text"
+	"data/gr"
+
+{-}
 	initEmptyGraph sspw
 	grShowToFIleIO 
 		"data/GraphShow" 
@@ -42,3 +52,4 @@ main = do
 	runStartLTM sspw
 
 sspw = SPWord "data/PEPN.fb2" "data/hashGraph.json"
+-}
