@@ -94,5 +94,7 @@ addToLHistoryRight a = do
 		then return Nothing
 		else adjSnd getHistoryLeft
 
-adjSeq :: M.AdjointT (Env (Seq a)) (Reader (Seq a)) m a -> M.AdjointT (HistoryAdjL a) (HistoryAdjR a) m a
+adjSeq :: Monad m => 
+	M.AdjointT (Env (Seq a)) (Reader (Seq a)) m a -> 
+	M.AdjointT (HistoryAdjL a) (HistoryAdjR a) m a
 adjSeq = adjSnd

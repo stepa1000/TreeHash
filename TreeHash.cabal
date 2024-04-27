@@ -45,7 +45,7 @@ library
       adjunction-combinators
     , adjunctions
     , aeson
-    , base >=4.7 && <5
+    , base >=4.19 && <5
     , bpann
     , bytestring
     , comonad
@@ -72,7 +72,7 @@ executable TreeHash-exe
     , adjunction-combinators
     , adjunctions
     , aeson
-    , base >=4.7 && <5
+    , base >=4.19 && <5
     , bpann
     , bytestring
     , comonad
@@ -100,7 +100,7 @@ test-suite TreeHash-test
     , adjunction-combinators
     , adjunctions
     , aeson
-    , base >=4.7 && <5
+    , base >=4.19 && <5
     , bpann
     , bytestring
     , comonad

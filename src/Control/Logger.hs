@@ -1,14 +1,14 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 -- | The logger interface module. It should not define a specific
 -- implementation.
-module Class.Logger where
+module Control.Logger where
 
-import Data.Yaml
 import GHC.Generics
-import Control.Concurrent.STM.TVar
 import Control.Core.Composition
 import Control.Core.Biparam
 import Control.Monad.Reader
@@ -31,7 +31,7 @@ import Data.Graph.Inductive.PatriciaTree as G
 import Data.Graph.Inductive.Graph as G
 import Data.ByteString as B
 import Data.Word
-import Data.Aeson as Aeson
+-- import Data.Aeson as Aeson
 import Control.Monad.Trans.Adjoint as M
 import Data.Functor.Adjunction
 import Control.Monad.Reader
@@ -50,14 +50,14 @@ import Control.Core.Composition
 import Data.Functor.Identity
 import Data.History
 import Data.NodeHash
-import Data.Other.Utils
+import Other.Utils
 
 data LogLevel
   = Debug
   | Info
   | Warning
   | Error
-  deriving (Show, Eq, Ord, Generic, ToJSON, FromJSON)
+  deriving (Show, Eq, Ord, Generic)
 
 logDebug,logInfo,logWarning,logError :: LogLevel -> String -> String
 logDebug ll s | ll <= Debug     = show Debug ++ ":" ++ s 
@@ -93,9 +93,9 @@ writeLog :: (Monad m, MonadIO m) =>
     AdjLogL
     AdjLogR
     m ()
-writeLog fp =
+writeLog fp = do
   str <- adjFst $ adjGetEnv
-  liftIO $ writeFile fp str
+  liftIO $ P.writeFile fp str
   adjFst $ adjSetEnv "" (Identity ())
 
 instance Monad m => MonadLoger (M.AdjointT AdjLogL AdjLogR m) where
@@ -116,10 +116,12 @@ instance Monad m => MonadLoger (M.AdjointT AdjLogL AdjLogR m) where
     ll <- adjSnd $ adjGetEnv
     adjFst $ adjSetEnv (sl ++ "/n" ++ (logError ll str)) (Identity ())
 
-instance (MonadIO m, Traversable f) => MonadIO (M.AdjointT f g m) where
+instance (MonadIO m, Monad m, Traversable f, Adjunction f g) => 
+  MonadIO (M.AdjointT f g m) where
   liftIO = lift . liftIO
 
-instance (MonadLoger m, Traversable f) => MonadLoger (M.AdjointT f g m) where
+instance (MonadLoger m, Monad m, Traversable f, Adjunction f g) => 
+  MonadLoger (M.AdjointT f g m) where
   logDebugM = lift . logDebugM
   logInfoM = lift . logInfoM
   logWarningM = lift . logWarningM

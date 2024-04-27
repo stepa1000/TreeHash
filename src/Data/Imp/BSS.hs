@@ -35,6 +35,7 @@ import Control.Core.Composition
 import Data.Functor.Identity
 import Data.History
 import Data.NodeHash
+import Data.Adj.Graph
 
 instance (MonadFail m, Adjunction f g, Traversable f) => MonadFail (AdjointT f g m) where
 	fail = lift . fail

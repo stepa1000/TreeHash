@@ -4,7 +4,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Data.Other.Utils where
+module Other.Utils where
 
 import Prelude as P
 import Data.Sequence as Seq
@@ -17,6 +17,7 @@ import Data.Maybe
 import Data.Graph.Inductive.PatriciaTree as G
 import Data.Graph.Inductive.Graph as G
 import Data.ByteString as B
+import Data.List as P
 import Data.Word
 import Data.Aeson as Aeson
 import Control.Monad.Trans.Adjoint as M
@@ -48,12 +49,12 @@ getRandomElementList :: [a] -> IO (Maybe a)
 getRandomElementList la = do
 	let l = P.length la
 	i <- randomRIO (0,l)
-	return $ la !? i
+	return $ la P.!? i
 
 getRELs :: Int -> [a] -> IO [a]
 getRELs i la = fmap catMaybes $ mapM (\_-> getRandomElementList la) [0..i]
 
 pairing :: [a] ->[(a,a)]
 pairing [] = []
-pairing (x:[]) = []
-pairing (x:x2:xs) = (x,xs) : (pairing (x2:[]))
+pairing (_:[]) = []
+pairing (x:x2:xs) = (x,x2) : (pairing (x2:xs))

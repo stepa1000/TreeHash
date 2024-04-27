@@ -16,6 +16,8 @@ import Data.Tree as Tree
 import Data.Maybe
 import Data.Graph.Inductive.PatriciaTree as G
 import Data.Graph.Inductive.Graph as G
+import Data.Graph.Inductive.Query.DFS as G
+import Data.Graph.Inductive.Query.ArtPoint as G
 import Data.ByteString as B
 import Data.Word
 import Data.Aeson as Aeson
@@ -35,7 +37,7 @@ import Control.Core.Biparam
 import Control.Core.Composition
 import Data.Functor.Identity
 import Data.History
-import Data.Other.Utils
+import Other.Utils
 
 getInfoHGr ::(Monad m, Hashable a, Hashable b, Eq a) => 
 	M.AdjointT 
@@ -58,7 +60,7 @@ getInfoHGr = do
 		) (Map.empty, Map.empty) gr
 
 
-showGr :: (Monad m, Hashable a, Eq a, Show a) =>
+showGr :: (Monad m, Hashable a, Eq a, Show a, Show b) =>
 	M.AdjointT 
 		(Env (Gr a b)) 
 		(Reader (Gr a b)) 
@@ -150,18 +152,18 @@ getDffA :: (Monad m, Hashable a, Eq a, Show a) =>
 		[Tree a]
 getDffA = do
 	gr <- adjGetEnv
-	return $ dffWith' lab' 
+	return $ dffWith' lab' gr
 
 randomPath :: (Monad m, MonadIO m, Hashable a, Eq a, Show a) =>
 	Gr a b ->
 	m [a]
 randomPath ga = do
 	let ta = dffWith' lab' ga
-	f ta
+	fmap join $ mapM f ta
 	where
 		f (Node a []) = return [a]
 		f (Node a lta) = do
 			mrta <- liftIO $ getRandomElementList lta
 			mlra <- fmap (join . maybeToList) $ mapM f mrta
-			return $ a : mra
+			return $ a : mlra
 

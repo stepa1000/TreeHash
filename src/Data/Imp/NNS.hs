@@ -39,9 +39,10 @@ import Control.Core.Composition
 import Data.Functor.Identity
 import Data.History
 import Data.NodeHash
-import Data.Other.Utils
-import Class.Logger
+import Other.Utils
+import Control.Logger
 import Data.Imp.BSS
+import Data.NN
 
 type NNAdjL a = 
 	(ConfNNAdjL 
@@ -91,10 +92,10 @@ lernToNN mvs spw lpw = do
 		e <- liftIO $ tryTakeMVar mvs
 		if e == (Just "s")
 			then do				
-				dm2 <- getDataNNSLPow
+				dm2 <- getDataNNSLPow npw
 				lift $ encodeFile (fileForState spw) dm2
 				mapM (\gr->do
-					liftIO $ writeFile ((fileNNGr spw) ++ "\" ++ (show $ hash gr) ++ ".dot") $
+					liftIO $ writeFile ((fileNNGr spw) ++ ("/") ++ (show $ hash gr) ++ ".dot") $
 						showDot $ fglToDotUnlabeled gr
 					) $ Map.keys $ hmrcgr dm2
 				lift $ print "safe sucsess"
