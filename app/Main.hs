@@ -28,6 +28,7 @@ import Data.Functor.Identity
 import Data.History
 import Data.NodeHash
 import Data.Imp.BSS
+import Data.Imp.NNS
 
 main :: IO ()
 main = do

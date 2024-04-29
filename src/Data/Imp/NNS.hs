@@ -3,10 +3,14 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module Data.Imp.NNS where
 
 import Prelude as P
+import Data.Foldable as P
 import Data.Sequence as Seq
 import System.Random
 import Data.Hashable
@@ -47,16 +51,20 @@ import Data.NN
 type NNAdjL a = 
 	(ConfNNAdjL 
 		(IMapNNRCAdjL 
-			(NNSLPowAdjL 
-				(NNSccListAdjL a)
+			(MapGrAdjL 
+				(NNSLPowAdjL 
+					(NNSccListAdjL a) 
+					a)
 				a)
 	))
 
 type NNAdjR a = 
 	(ConfNNAdjR 
 		(IMapNNRCAdjR
-			(NNSLPowAdjR 
-				(NNSccListAdjR a)
+			(MapGrAdjR
+				(NNSLPowAdjR 
+					(NNSccListAdjR a) 
+					a)
 				a)
 	))
 
@@ -79,29 +87,31 @@ instance ClassNNSLPowAdj (NNAdjL a) (NNAdjR a) a where
 	liftNNSccListAdjGr = adjSnd . adjSnd . adjSnd . adjFst
 	liftNNSccListAdjA = adjSnd . adjSnd . adjSnd . adjSnd
 
-lernToNN :: MVar String -> SettingNN -> [(a,a)] -> AdjunctorNN a ()
+instance NNSccListAdj (NNAdjL a) (NNAdjR a) a where
+	liftNNSccListAdj = liftNNSccListAdjA
+
+lernToNN :: (Hashable a, Show a, ToJSON a, ListDoubled a) => 
+	MVar String -> SettingNN -> [(a,a)] -> AdjunctorNN a ()
 lernToNN mvs spw lpw = do
 	-- like lernToMemory
-	foldlM (\mp npw->do
-		pr <- updateAPre npw
-		lift $ logInfoM $ "answer:" .< npw
-		r <- mapM (\(ppr,opw)->
-			lift $ logInfoM $ "consequence:" .< (Map.keys $ snd ppr)
-			updateAPost (opw,npw) ppr
-			) mp
+	mapM_ (\(npw::(a,a))->do
+		(pr :: ( AllResult a, ConsequenceResult a)) <- updateAPre $ fst npw
+		lift $ logInfoM $ "answer:" .< snd npw
+		lift $ logInfoM $ "consequence:" .< (Map.keys $ snd pr)
+		updateAPost npw pr
 		e <- liftIO $ tryTakeMVar mvs
 		if e == (Just "s")
 			then do				
-				dm2 <- getDataNNSLPow npw
-				lift $ encodeFile (fileForState spw) dm2
+				dm2 <- getDataNNSLPow $ fst npw
+				liftIO $ encodeFile (fileNNForState spw) dm2
 				mapM (\gr->do
-					liftIO $ writeFile ((fileNNGr spw) ++ ("/") ++ (show $ hash gr) ++ ".dot") $
+					liftIO $ P.writeFile ((fileNNGr spw) ++ ("/") ++ (show $ hash gr) ++ ".dot") $
 						showDot $ fglToDotUnlabeled gr
 					) $ Map.keys $ hmrcgr dm2
-				lift $ print "safe sucsess"
-				return (pr,npw)
-			else return (pr,npw)
-		) Nothing lpw
+				liftIO $ print "safe sucsess"
+				return ()
+			else return ()
+		) lpw
 
 data SettingNN = SettingNN 
 	{ fileNNForRead :: FilePath
@@ -117,14 +127,31 @@ initNNS spw = do
 		(Right (Just _)) -> return ()
 		_ -> encodeFile @(DataNNSLPow PWord) (fileNNForState spw) $ 
 			DataNNSLPow 
+				(DataNN [7,7] IMap.empty)
+				(DataNN [2,2] IMap.empty)
+				Map.empty
+				IMap.empty
+				(ConfNN 
+					(0.5,1.5)
+					(0.5,1.5)
+					100
+					10
+					50
+					11
+					11
+					)
 
-startlTNN :: MVar String -> SettingNN -> AdjunctorNN PWord ()
+instance ListDoubled Word8 where
+	toLD a = [[fromIntegral a]]
+	fromLD (x:[]) _ = round x
+
+startlTNN :: MVar String -> SettingNN -> AdjunctorNN Word8 ()
 startlTNN mvs spw = do
-	(Just dm1) <- liftIO $ decodeFileStrict (fileNNForState spw) 
+	(Just dm1) <- liftIO $ decodeFileStrict @(DataNNSLPow Word8) (fileNNForState spw) 
 	setDataNNSLPow dm1
-	(Just pw) <- liftIO $ B.readFile (fileNNForRead spw) 
+	pw <- liftIO $ B.readFile (fileNNForRead spw) 
 	lernToNN mvs spw $ bsToPW pw
-	lift $ writeLog (fuleNNLog spw)
+	lift $ writeLog (fileNNLog spw)
 
 runNNSccListAdj :: Monad m =>
 	M.AdjointT 
@@ -141,9 +168,9 @@ runNNSccListAdj = void .
 	runAdjTfst 0 .
 	subAdjSnd
 
-runAdjunctorNN :: AdjunctorNN b -> IO ()
+runAdjunctorNN :: AdjunctorNN b c -> IO ()
 runAdjunctorNN = void .
-	runAdjT Error .
+	runAdjT Control.Logger.Error .
 	runAdjTfst "" .
 	runNNSccListAdj .
 	runNNSccListAdj .
@@ -153,11 +180,11 @@ runAdjunctorNN = void .
 	runAdjTfst 
 		( ConfNN (0,0) (0,0) 0 0 0 0 0) 
 
-runLTNN :: SettingNN -> IO ()
+runLTNN :: SettingNN -> IO () 
 runLTNN snn = do
 	mvs <- newEmptyMVar 
 	forkIO $ runAdjunctorNN $ 
-		startlTNN mvs spw
+		startlTNN mvs snn
 	str <- P.getLine
 	f mvs str
 	where

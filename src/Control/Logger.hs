@@ -119,10 +119,11 @@ instance Monad m => MonadLoger (M.AdjointT AdjLogL AdjLogR m) where
 instance (MonadIO m, Monad m, Traversable f, Adjunction f g) => 
   MonadIO (M.AdjointT f g m) where
   liftIO = lift . liftIO
-
+{-}
 instance (MonadLoger m, Monad m, Traversable f, Adjunction f g) => 
   MonadLoger (M.AdjointT f g m) where
   logDebugM = lift . logDebugM
   logInfoM = lift . logInfoM
   logWarningM = lift . logWarningM
   logErrorM = lift . logErrorM
+-}

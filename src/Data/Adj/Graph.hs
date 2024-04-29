@@ -103,7 +103,7 @@ getSccGr = do
 	let lp = fmap catMaybes $ (fmap . fmap) (\p-> G.lab gr p) $ G.scc gr
 	return lp 
 
-getSccGrNode :: (Monad m, Hashable a, Eq a, Show a) =>
+getSccGrNode :: (Monad m, Hashable a, Eq a) =>
 	M.AdjointT 
 		(Env (Gr a b)) 
 		(Reader (Gr a b)) 
@@ -114,7 +114,7 @@ getSccGrNode = do
 	let lp = G.scc gr
 	return lp
 
-getSccGrGraph :: (Monad m, Hashable a, Eq a, Show a) =>
+getSccGrGraph :: (Monad m, Hashable a, Eq a) =>
 	M.AdjointT 
 		(Env (Gr a b)) 
 		(Reader (Gr a b)) 
@@ -154,7 +154,7 @@ getDffA = do
 	gr <- adjGetEnv
 	return $ dffWith' lab' gr
 
-randomPath :: (Monad m, MonadIO m, Hashable a, Eq a, Show a) =>
+randomPath :: (Monad m, MonadIO m, Hashable a, Eq a) =>
 	Gr a b ->
 	m [a]
 randomPath ga = do
