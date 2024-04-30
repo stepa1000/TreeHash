@@ -126,8 +126,12 @@ getSccGrGraph = do
 	return $ fmap (\l->subgraph l gr) ln
 
 sccArtPoint :: Gr a b -> [Gr a b]
+sccArtPoint gr 
+	| G.isEmpty gr = []
 sccArtPoint gr = (f $ P.foldr (\a b->G.delNode a b) gr artP)
 	where
+		f grn 
+			| G.isEmpty grn = [] 
 		f grn = join $ fmap (\l-> sccArtPoint $ subgraph l grn) lp
 			where
 				lp = G.scc grn

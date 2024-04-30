@@ -13,6 +13,7 @@ import Prelude as P
 import Data.Foldable as P
 import Data.Sequence as Seq
 import System.Random
+import System.IO
 import Data.Hashable
 import Data.HashSet as Set
 import Data.HashMap.Lazy as Map
@@ -127,8 +128,8 @@ initNNS spw = do
 		(Right (Just _)) -> return ()
 		_ -> encodeFile @(DataNNSLPow PWord) (fileNNForState spw) $ 
 			DataNNSLPow 
-				(DataNN [7,7] IMap.empty)
-				(DataNN [2,2] IMap.empty)
+				(DataNN [7,7,7] IMap.empty)
+				(DataNN [1,1,1] IMap.empty)
 				Map.empty
 				IMap.empty
 				(ConfNN 
@@ -147,11 +148,11 @@ instance ListDoubled Word8 where
 
 startlTNN :: MVar String -> SettingNN -> AdjunctorNN Word8 ()
 startlTNN mvs spw = do
+	lift $ openHandleWrite $ fileNNLog spw
 	(Just dm1) <- liftIO $ decodeFileStrict @(DataNNSLPow Word8) (fileNNForState spw) 
 	setDataNNSLPow dm1
 	pw <- liftIO $ B.readFile (fileNNForRead spw) 
 	lernToNN mvs spw $ bsToPW pw
-	lift $ writeLog (fileNNLog spw)
 
 runNNSccListAdj :: Monad m =>
 	M.AdjointT 
@@ -170,8 +171,8 @@ runNNSccListAdj = void .
 
 runAdjunctorNN :: AdjunctorNN b c -> IO ()
 runAdjunctorNN = void .
-	runAdjT Control.Logger.Error .
-	runAdjTfst "" .
+	runAdjT Control.Logger.Debug .
+	runAdjTfst stdout .
 	runNNSccListAdj .
 	runNNSccListAdj .
 	subAdjSnd .

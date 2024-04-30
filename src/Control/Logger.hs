@@ -21,6 +21,7 @@ import Data.Functor.Identity
 import Prelude as P
 import Data.Sequence as Seq
 import System.Random
+import System.IO
 import Data.Hashable
 import Data.HashSet as Set
 import Data.HashMap.Lazy as Map
@@ -83,38 +84,37 @@ class MonadLoger m where
   logWarningM :: String -> m ()
   logErrorM :: String -> m ()
 
-type AdjLogL = (Env String) :.: (Env LogLevel)
+type AdjLogL = (Env Handle) :.: (Env LogLevel)
 
-type AdjLogR = (Reader LogLevel) :.: (Reader String) 
+type AdjLogR = (Reader LogLevel) :.: (Reader Handle) 
 
-writeLog :: (Monad m, MonadIO m) =>
+openHandleWrite :: (Monad m, MonadIO m) =>
   FilePath ->
   M.AdjointT 
     AdjLogL
     AdjLogR
     m ()
-writeLog fp = do
-  str <- adjFst $ adjGetEnv
-  liftIO $ P.writeFile fp str
-  adjFst $ adjSetEnv "" (Identity ())
+openHandleWrite fp = do
+  h <- liftIO $ openFile fp WriteMode
+  adjFst $ adjSetEnv h (Identity ())
 
-instance Monad m => MonadLoger (M.AdjointT AdjLogL AdjLogR m) where
+instance (Monad m, MonadIO m) => MonadLoger (M.AdjointT AdjLogL AdjLogR m) where
   logDebugM str = do
     sl <- adjFst $ adjGetEnv
     ll <- adjSnd $ adjGetEnv
-    adjFst $ adjSetEnv (sl ++ "/n" ++ (logDebug ll str)) (Identity ())
+    liftIO $ hPutStrLn sl $ logDebug ll str 
   logInfoM str = do
     sl <- adjFst $ adjGetEnv
     ll <- adjSnd $ adjGetEnv
-    adjFst $ adjSetEnv (sl ++ "/n" ++ (logInfo ll str)) (Identity ())
+    liftIO $ hPutStrLn sl $ logInfo ll str
   logWarningM str = do
     sl <- adjFst $ adjGetEnv
     ll <- adjSnd $ adjGetEnv
-    adjFst $ adjSetEnv (sl ++ "/n" ++ (logWarning ll str)) (Identity ())
+    liftIO $ hPutStrLn sl $ logWarning ll str
   logErrorM str = do
     sl <- adjFst $ adjGetEnv
     ll <- adjSnd $ adjGetEnv
-    adjFst $ adjSetEnv (sl ++ "/n" ++ (logError ll str)) (Identity ())
+    liftIO $ hPutStrLn sl $ logError ll str
 
 instance (MonadIO m, Monad m, Traversable f, Adjunction f g) => 
   MonadIO (M.AdjointT f g m) where
