@@ -96,6 +96,10 @@ openHandleWrite :: (Monad m, MonadIO m) =>
     m ()
 openHandleWrite fp = do
   h <- liftIO $ openFile fp WriteMode
+  liftIO $ hPutStrLn h "Logger is open"
+  s <- liftIO $ hShow h
+  liftIO $ hPutStrLn h s
+  traceShowM s
   b <- liftIO $ hIsWritable h
   traceShowM b 
   adjFst $ adjSetEnv h (Identity ())
@@ -108,7 +112,7 @@ instance (Monad m, MonadIO m) => MonadLoger (M.AdjointT AdjLogL AdjLogR m) where
   logInfoM str = do
     sl <- adjFst $ adjGetEnv
     ll <- adjSnd $ adjGetEnv
-    liftIO $ hPutStrLn sl $ logInfo ll str
+    liftIO $ hPutStrLn sl $ logInfo ll str 
   logWarningM str = do
     sl <- adjFst $ adjGetEnv
     ll <- adjSnd $ adjGetEnv
@@ -117,6 +121,25 @@ instance (Monad m, MonadIO m) => MonadLoger (M.AdjointT AdjLogL AdjLogR m) where
     sl <- adjFst $ adjGetEnv
     ll <- adjSnd $ adjGetEnv
     liftIO $ hPutStrLn sl $ logError ll str
+
+instance (Monad m) => MonadLoger (M.AdjointT (Env LogLevel) (Reader LogLevel) m) where
+  logDebugM str = do
+    ll <- adjGetEnv
+    if (not $ P.null str) 
+      then traceShowM $ logDebug ll str
+      else return ()
+  logInfoM str = do
+    ll <- adjGetEnv
+    when (not $ P.null str) $
+      traceShowM $ logInfo ll str
+  logWarningM str = do
+    ll <- adjGetEnv
+    when (not $ P.null str) $
+      traceShowM $ logWarning ll str
+  logErrorM str = do
+    ll <- adjGetEnv
+    when (not $ P.null str) $
+      traceShowM $ logError ll str
 
 instance (MonadIO m, Monad m, Traversable f, Adjunction f g) => 
   MonadIO (M.AdjointT f g m) where

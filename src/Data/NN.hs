@@ -605,15 +605,17 @@ restorationNNSccLPrimerUp' p pe pa rc snn r si ui = do
 		$ mapM (\_-> do
 		(b :: Bool) <- adjNNSLliftAdjNetworkL lnnull
 		lhscchnn <- restorationNNSccLPrimer p pe pa
-		lift $ logDebugM "Post: restorationNNSccLPrimer"
+		lift $ logInfoM "Post: restorationNNSccLPrimer"  -- logDebugM
 		when (b || (P.null lhscchnn)) $ do
 			adjNNSLliftAdjNetworkL $ creatRandomNetworksAdj_ snn
 			adjNNSLliftNNGr $ adjSetEnv G.empty (Identity ())
 			adjNNSLliftAdjNNGr $ upgradingNNGr p pe pa r si ui
-		fmap unionScc $ mapM (\(hscc,hnn)->do
+		hnn' <- fmap unionScc $ mapM (\(hscc,hnn)->do
 			let n = packNetwork hnn
 			return (IMap.singleton (hash $ n) (n,[hscc]))
 			) lhscchnn
+		lift $ logInfoM $ "Result cyckle:" .< (IMap.size hnn')
+		return hnn'
 		) [0..rc]
 	adjNNSLliftAdjNNGr $ onlyInGr
 	lift $ logInfoM "End: restorationNNSccLPrimerUp'"

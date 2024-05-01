@@ -73,7 +73,8 @@ type AdjunctorNN a =
 	M.AdjointT 
 		(NNAdjL a) 
 		(NNAdjR a)
-		(M.AdjointT AdjLogL AdjLogR IO)
+		(M.AdjointT (Env LogLevel) (Reader LogLevel) IO)
+		--(M.AdjointT AdjLogL AdjLogR IO)
 
 instance ClassConfNNAdj (NNAdjL a) (NNAdjR a) where
 	liftConfNNAdj = adjFst
@@ -148,7 +149,7 @@ instance ListDoubled Word8 where
 
 startlTNN :: MVar String -> SettingNN -> AdjunctorNN Word8 ()
 startlTNN mvs spw = do
-	lift $ openHandleWrite $ fileNNLog spw
+	-- lift $ openHandleWrite $ fileNNLog spw
 	(Just dm1) <- liftIO $ decodeFileStrict @(DataNNSLPow Word8) (fileNNForState spw) 
 	setDataNNSLPow dm1
 	pw <- liftIO $ B.readFile (fileNNForRead spw) 
@@ -172,7 +173,7 @@ runNNSccListAdj = void .
 runAdjunctorNN :: AdjunctorNN b c -> IO ()
 runAdjunctorNN = void .
 	runAdjT Control.Logger.Info .
-	runAdjTfst stdout .
+	-- runAdjTfst stdout .
 	runNNSccListAdj .
 	runNNSccListAdj .
 	subAdjSnd .
