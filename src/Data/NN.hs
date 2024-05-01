@@ -585,7 +585,7 @@ restorationNNSccLPrimer p pe pa = do
 type RestorationCycle = Int 
 
 restorationNNSccLPrimerUp' :: 
-	(Monad m, MonadIO m, Hashable a, ListDoubled a, Eq a, MonadLoger m) => 
+	(Monad m, MonadIO m, Hashable a, ListDoubled a, Eq a, MonadLoger m, Show a) => 
 	(Double,Double) ->
 	(Double,Double) ->
 	(a,a) ->
@@ -601,9 +601,10 @@ restorationNNSccLPrimerUp' ::
 		(IntMap ([[PackedNeuron]],[Gr (Hashed a) HashNN]))
 restorationNNSccLPrimerUp' p pe pa rc snn r si ui = do
 	lift $ logInfoM "Start: restorationNNSccLPrimerUp'"
-	hnn <- fmap unionScc
+	hnn <- fmap (unionScc . traceShowId)
 		$ mapM (\_-> do
 		(b :: Bool) <- adjNNSLliftAdjNetworkL lnnull
+		lift $ logInfoM "Pre: restorationNNSccLPrimer"
 		lhscchnn <- restorationNNSccLPrimer p pe pa
 		lift $ logInfoM "Post: restorationNNSccLPrimer"  -- logDebugM
 		when (b || (P.null lhscchnn)) $ do
@@ -617,6 +618,7 @@ restorationNNSccLPrimerUp' p pe pa rc snn r si ui = do
 		lift $ logInfoM $ "Result cyckle:" .< (IMap.size hnn')
 		return hnn'
 		) [0..rc]
+	lift $ logInfoM "Pre: onlyInGr'"
 	adjNNSLliftAdjNNGr $ onlyInGr
 	lift $ logInfoM "End: restorationNNSccLPrimerUp'"
 	return $ hnn
@@ -771,7 +773,7 @@ class ClassNNSLPowAdj f g a where
 restorationPow :: 
 	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a,
 		ClassNNSLPowAdj f g a, Adjunction f g, Traversable f,
-		MonadLoger m
+		MonadLoger m, Show a
 	) => 
 	(Double,Double) ->
 	(Double,Double) ->
@@ -827,7 +829,7 @@ restorationPow p pe (ta :: a) rc snn r si ui = do
 restorationPowUp :: 
 	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a,
 		ClassNNSLPowAdj f g a, Adjunction f g, Traversable f,
-		MonadLoger m
+		MonadLoger m, Show a
 	) => 
 	(Double,Double) ->
 	(Double,Double) ->

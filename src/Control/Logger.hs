@@ -130,16 +130,19 @@ instance (Monad m) => MonadLoger (M.AdjointT (Env LogLevel) (Reader LogLevel) m)
       else return ()
   logInfoM str = do
     ll <- adjGetEnv
-    when (not $ P.null str) $
-      traceShowM $ logInfo ll str
+    if (not $ P.null str) 
+      then traceShowM $ logInfo ll str
+      else return ()
   logWarningM str = do
     ll <- adjGetEnv
-    when (not $ P.null str) $
-      traceShowM $ logWarning ll str
+    if (not $ P.null str) 
+      then traceShowM $ logWarning ll str
+      else return ()
   logErrorM str = do
     ll <- adjGetEnv
-    when (not $ P.null str) $
-      traceShowM $ logError ll str
+    if (not $ P.null str) 
+      then traceShowM $ logError ll str
+      else return ()
 
 instance (MonadIO m, Monad m, Traversable f, Adjunction f g) => 
   MonadIO (M.AdjointT f g m) where

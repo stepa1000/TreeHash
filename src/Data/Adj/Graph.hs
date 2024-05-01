@@ -30,6 +30,7 @@ import Control.Comonad.Env
 import Control.Monad.IO.Class
 import Control.Concurrent.MVar
 import Control.Concurrent
+import Control.Logger
 import GHC.Generics
 import AI.BPANN
 import Control.Base.Comonad

@@ -172,7 +172,7 @@ runNNSccListAdj = void .
 
 runAdjunctorNN :: AdjunctorNN b c -> IO ()
 runAdjunctorNN = void .
-	runAdjT Control.Logger.Info .
+	runAdjT Control.Logger.Debug .
 	-- runAdjTfst stdout .
 	runNNSccListAdj .
 	runNNSccListAdj .
