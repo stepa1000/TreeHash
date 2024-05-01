@@ -96,6 +96,8 @@ openHandleWrite :: (Monad m, MonadIO m) =>
     m ()
 openHandleWrite fp = do
   h <- liftIO $ openFile fp WriteMode
+  b <- liftIO $ hIsWritable h
+  traceShowM b 
   adjFst $ adjSetEnv h (Identity ())
 
 instance (Monad m, MonadIO m) => MonadLoger (M.AdjointT AdjLogL AdjLogR m) where

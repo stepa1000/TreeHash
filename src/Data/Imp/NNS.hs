@@ -135,11 +135,11 @@ initNNS spw = do
 				(ConfNN 
 					(0.5,1.5)
 					(0.5,1.5)
-					100
 					10
-					50
-					11
-					11
+					2
+					3
+					2
+					2
 					)
 
 instance ListDoubled Word8 where
@@ -171,7 +171,7 @@ runNNSccListAdj = void .
 
 runAdjunctorNN :: AdjunctorNN b c -> IO ()
 runAdjunctorNN = void .
-	runAdjT Control.Logger.Debug .
+	runAdjT Control.Logger.Info .
 	runAdjTfst stdout .
 	runNNSccListAdj .
 	runNNSccListAdj .

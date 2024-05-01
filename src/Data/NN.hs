@@ -112,8 +112,8 @@ creatRandomNetworksAdj_ :: (Monad m, MonadIO m) =>
 		()
 creatRandomNetworksAdj_ j = do
 	ln <- creatRandomNetworksAdj j
-	lnold <- adjFst $ adjGetEnv
-	adjFst $ adjSetEnv (ln ++ lnold) (Identity ())
+	-- lnold <- adjFst $ adjGetEnv
+	adjFst $ adjSetEnv ln (Identity ())
 
 trainAdj :: (Monad m, MonadIO m,MonadLoger m) => 
 	(Double,Double) ->
@@ -568,7 +568,9 @@ restorationNNSccLPrimer p pe pa = do
 	adjNNSLliftAdjNetworkL $ trainAdjLDL p pe plrp
 	(lr :: [(HashNN,a)]) <- adjNNSLliftAdjNetworkL $ calculateAdjLD $ fst pa
 	lift $ logDebugM $ "Length pre result: " .< (P.length lr)
-	let fl = P.filter (\(h,a)->traceShowId $ a == (snd pa)) lr
+	nl <- adjNNSLliftLayers adjGetEnv
+	lift $ logDebugM $ "Layers NN: " .< nl
+	let fl = P.filter (\(h,a)-> a == (snd pa)) lr
 	lift $ logDebugM $ "Length result: " .< (P.length fl)
 	rnnslp <- fmap catMaybes $ mapM (\x-> do 
 		(mn :: Maybe Network) <- adjNNSLliftAdjNetworkL $ getNN $ fst x
@@ -598,7 +600,7 @@ restorationNNSccLPrimerUp' ::
 		m 
 		(IntMap ([[PackedNeuron]],[Gr (Hashed a) HashNN]))
 restorationNNSccLPrimerUp' p pe pa rc snn r si ui = do
-	lift $ logDebugM "Start: restorationNNSccLPrimerUp'"
+	lift $ logInfoM "Start: restorationNNSccLPrimerUp'"
 	hnn <- fmap unionScc
 		$ mapM (\_-> do
 		(b :: Bool) <- adjNNSLliftAdjNetworkL lnnull
@@ -614,7 +616,7 @@ restorationNNSccLPrimerUp' p pe pa rc snn r si ui = do
 			) lhscchnn
 		) [0..rc]
 	adjNNSLliftAdjNNGr $ onlyInGr
-	lift $ logDebugM "End: restorationNNSccLPrimerUp'"
+	lift $ logInfoM "End: restorationNNSccLPrimerUp'"
 	return $ hnn
 
 unionScc = P.foldr (IMap.unionWith (\(x1,y1) (_,y2)->(x1,y1++y2))) IMap.empty
@@ -835,11 +837,12 @@ restorationPowUp ::
 	UpgradingInt ->
 	M.AdjointT f g m ()
 restorationPowUp p pe pa rc snn r si ui = do
-	lift $ logDebugM "Start: restorationPowUp"
+	lift $ logInfoM "Start: restorationPowUp"
 	liftNNSccListAdjA $ 
 		restorationNNSccLPrimerUp' p pe pa rc snn r si ui
+	lift $ logInfoM "Post: restorationNNSccLPrimerUp'"
 	restorationPow p pe (fst pa) rc snn r si ui
-	lift $ logDebugM "End: restorationPowUp"
+	lift $ logInfoM "End: restorationPowUp"
 
 type HashNNGr = HashNN
 
@@ -1037,8 +1040,10 @@ safeTrueAssumptuonFull ::
 	HashMap a ([(PowGr a,PowGr a, HashNNGr,[[[PackedNeuron]]])]) ->
 	M.AdjointT f g m ()
 safeTrueAssumptuonFull ta hma = do
+	lift $ logInfoM "Start: safeTrueAssumptuonFull"
 	o <- safeTrueAssumptuon ta hma
 	liftIMapNNRAdj $ safeTrueAssumptuonNNRC o
+	lift $ logInfoM "End: safeTrueAssumptuonFull"
 
 type AllResult a = 
 	HashMap a ([(PowGr a,PowGr a, HashNNGr,[[[PackedNeuron]]])])
@@ -1099,8 +1104,11 @@ updateAssumptionPost ::
 	) ->
 	M.AdjointT f g m ()
 updateAssumptionPost p pe pa snn r si ui sar pr = do
+	lift $ logInfoM "Start: updateAssumptionPost"
 	safeTrueAssumptuonFull (snd pa) (fst pr)
+	lift $ logInfoM $ traceShowId "Post: safeTrueAssumptuonFull"
 	restorationPowUp p pe pa sar snn r si ui 
+	lift $ logInfoM "End: updateAssumptionPost"
 
 data ConfNN = ConfNN 
 	{ confLRA :: (Double,Double)
