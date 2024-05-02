@@ -126,21 +126,29 @@ initNNS :: SettingNN -> IO ()
 initNNS spw = do
 	m <- try @SomeException $ decodeFileStrict @(DataNNSLPow PWord) (fileNNForState spw)
 	case m of
-		(Right (Just _)) -> return ()
-		_ -> encodeFile @(DataNNSLPow PWord) (fileNNForState spw) $ 
-			DataNNSLPow 
+		(Right (Just dnn)) -> do
+			encodeFile @(DataNNSLPow PWord) (fileNNForState spw) $ 
+				dnnD 
+					{ dnnGr = (dnnGr dnn) {nnLayers = nnLayers $ dnnGr dnnD} 
+					, dnnA = (dnnA dnn) {nnLayers = nnLayers $ dnnA dnnD}
+					, hmrcgr = hmrcgr dnn
+					, imrcnn = imrcnn dnn
+					}
+		_ -> encodeFile @(DataNNSLPow PWord) (fileNNForState spw) dnnD
+	where
+		dnnD = DataNNSLPow 
 				(DataNN [7,7,7] IMap.empty)
-				(DataNN [1,1,1] IMap.empty)
+				(DataNN [1,2,1] IMap.empty)
 				Map.empty
 				IMap.empty
 				(ConfNN 
 					(0.5,1.5)
-					(0.5,1.5)
-					10
-					2
-					3
-					2
-					2
+					(0.0001,0.001)
+					100
+					5
+					5
+					5
+					5
 					)
 
 instance ListDoubled Word8 where

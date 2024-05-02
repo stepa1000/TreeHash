@@ -46,7 +46,7 @@ library
     , adjunctions
     , aeson
     , base >=4.19 && <5
-    , bpann
+    , bpann-my
     , bytestring
     , comonad
     , containers
@@ -73,7 +73,7 @@ executable TreeHash-exe
     , adjunctions
     , aeson
     , base >=4.19 && <5
-    , bpann
+    , bpann-my
     , bytestring
     , comonad
     , containers
@@ -101,7 +101,7 @@ test-suite TreeHash-test
     , adjunctions
     , aeson
     , base >=4.19 && <5
-    , bpann
+    , bpann-my
     , bytestring
     , comonad
     , containers

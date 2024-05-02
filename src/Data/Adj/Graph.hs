@@ -130,7 +130,7 @@ getSccGrGraph = do
 sccArtPoint :: Gr a b -> [Gr a b]
 sccArtPoint gr 
 	| G.isEmpty gr = []
-	| P.length (labNodes gr) == 1 = []
+	| P.length (labNodes gr) == 1 = [gr]
 sccArtPoint gr = (f $ P.foldr (\a b->G.delNode a b) gr artP)
 	where
 		f grn 

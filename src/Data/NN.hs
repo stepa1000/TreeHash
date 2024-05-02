@@ -32,6 +32,7 @@ import Control.Monad.Trans.Adjoint as M
 import Data.Functor.Adjunction
 import Control.Monad.Reader
 import Control.Monad
+import Control.Applicative
 import Control.Exception
 import Control.Comonad.Env
 import Control.Monad.IO.Class
@@ -68,15 +69,15 @@ getNN :: (Monad m, MonadIO m, MonadLoger m) =>
 		m
 		(Maybe Network)
 getNN h = do
-	lift $ logDebugM "Start: getNN"
+	--lift $ logDebugM "Start: getNN"
 	ln <- adjFst $ adjGetEnv
-	lift $ logDebugM $ "Length list get NN: " .< (P.length ln)
+	--lift $ logDebugM $ "Length list get NN: " .< (P.length ln) ==
 	let mn = P.find (\n-> hash (packNetwork n) == h) ln
 	let ln' = P.filter (\n-> not $ hash (packNetwork n) == h) ln
-	lift $ logDebugM $ "find NN: " .< (isJust mn)
-	lift $ logDebugM $ "Length list set NN: " .< (P.length ln')
+	--lift $ logDebugM $ "find NN: " .< (isJust mn)
+	--lift $ logDebugM $ "Length list set NN: " .< (P.length ln')
 	adjFst $ adjSetEnv ln' (Identity ())
-	lift $ logDebugM "End: getNN"
+	--lift $ logDebugM "End: getNN"
 	return mn
 
 lnnull :: (Monad m, MonadIO m) => 
@@ -111,17 +112,17 @@ creatRandomNetworksAdj_ :: (Monad m, MonadIO m, MonadLoger m) =>
 		m 
 		()
 creatRandomNetworksAdj_ j = do
-	lift $ logDebugM "*** Start: creatRandomNetworksAdj_"
+	--lift $ logDebugM "*** Start: creatRandomNetworksAdj_"
 	ln <- creatRandomNetworksAdj j
-	lift $ logDebugM "Start: Neiron desctiptions"
+	{-lift $ logDebugM "Start: Neiron desctiptions"
 	mapM_ (\l2-> mapM_ (\l1-> mapM_ (\(n,_)->do
 		lift $ logDebugM $ "fun0: " .< ((fun n) 0)
 		lift $ logDebugM $ "fun0.5: " .< ((fun n) 0.5)
 		lift $ logDebugM $ "fun1: " .< ((fun n) 1)
 		lift $ logDebugM $ "w: " .< (ws n)
-		) l1) l2) ln
-	lift $ logDebugM "End: Neiron desctiptions"
-	lift $ logDebugM "*** End: creatRandomNetworksAdj_"
+		) l1) l2) ln-}
+	--lift $ logDebugM "End: Neiron desctiptions"
+	--lift $ logDebugM "*** End: creatRandomNetworksAdj_"
 	-- lnold <- adjFst $ adjGetEnv
 	adjFst $ adjSetEnv ln (Identity ())
 
@@ -135,23 +136,24 @@ trainAdj :: (Monad m, MonadIO m,MonadLoger m) =>
 		m 
 		()
 trainAdj p pe ldd = do
-	lift $ logDebugM "Start: trainAdj"
+	--lift $ logDebugM "Start: trainAdj"
 	i <- liftIO $ randomRIO p
 	e <- liftIO $ randomRIO pe
 	lnold <- adjFst $ adjGetEnv
-	lift $ logDebugM $ "Length list NN:" .< (P.length lnold)
-	let ln = P.map (\n-> train i e n ldd) lnold
-	lift $ logDebugM $ "Length list result NN:" .< (P.length lnold)
-	lift $ logDebugM "Start: Neiron desctiptions in trainAdj"
-	mapM_ (\l2-> mapM_ (\l1-> mapM_ (\(n,_)->do
+	--lift $ logDebugM $ "Length list NN:" .< (P.length lnold)
+	let ln = catMaybes $ P.map (\n-> train 100000 i e n ldd) lnold
+	--lift $ logDebugM $ "Length list result NN:" .< (P.length ln)
+	--lift $ logDebugM $ "Input train:" .< ldd
+	--lift $ logDebugM "Start: Neiron desctiptions in trainAdj"
+	{-mapM_ (\l2-> mapM_ (\l1-> mapM_ (\(n,_)->do
 		lift $ logDebugM $ "fun0: " .< ((fun n) 0)
 		lift $ logDebugM $ "fun0.5: " .< ((fun n) 0.5)
 		lift $ logDebugM $ "fun1: " .< ((fun n) 1)
 		lift $ logDebugM $ "w: " .< (ws n)
-		) l1) l2) ln
-	lift $ logDebugM "End: Neiron desctiptions in trainAdj"
+		) l1) l2) ln-}
+	--lift $ logDebugM "End: Neiron desctiptions in trainAdj"
 	adjFst $ adjSetEnv ln (Identity ())
-	lift $ logDebugM "End: trainAdj"
+	--lift $ logDebugM "End: trainAdj"
 
 trainAdjP :: (Monad m, MonadIO m) => 
 	(Double,Double) ->
@@ -166,7 +168,13 @@ trainAdjP p pe lldd = do
 	i <- liftIO $ randomRIO p
 	e <- liftIO $ randomRIO pe
 	lnold <- adjFst $ adjGetEnv
-	let ln = P.map (\n-> P.foldr (\ ldd n'-> train i e n' ldd) n lldd) lnold
+	let ln = catMaybes $ P.map (\n-> P.foldr (\ ldd mn'-> (do
+			n' <- mn'
+			train 100000 i e n' ldd
+		) <|> (do
+			train 100000 i e n ldd
+		)) (Just n) lldd
+		) lnold
 	adjFst $ adjSetEnv ln (Identity ())
 
 calculateAdj :: 
@@ -180,24 +188,24 @@ calculateAdj ::
 		m 
 		[(Hash,[Double])]
 calculateAdj ld = do
-	lift $ logDebugM "Start: calculateAdj"
+	--lift $ logDebugM "Start: calculateAdj"
 	lnold <- adjFst $ adjGetEnv
-	lift $ logDebugM $ "Length list NN: " .< (P.length lnold)
-	lift $ logDebugM "Start: Neiron desctiptions"
-	mapM_ (\l2-> mapM_ (\l1-> mapM_ (\(n,_)->do
+	--lift $ logDebugM $ "Length list NN: " .< (P.length lnold)
+	--lift $ logDebugM "Start: Neiron desctiptions"
+	{-mapM_ (\l2-> mapM_ (\l1-> mapM_ (\(n,_)->do
 		lift $ logDebugM $ "fun0: " .< ((fun n) 0)
 		lift $ logDebugM $ "fun0.5: " .< ((fun n) 0.5)
 		lift $ logDebugM $ "fun1: " .< ((fun n) 1)
 		lift $ logDebugM $ "w: " .< (ws n)
-		) l1) l2) lnold
-	lift $ logDebugM "End: Neiron desctiptions"
+		) l1) l2) lnold-}
+	--lift $ logDebugM "End: Neiron desctiptions"
 	let lh = fmap (hash . packNetwork) lnold
 	let lc = fmap (\n-> calculate n ld) lnold
 	ll <- adjSnd $ adjGetEnv
-	lift $ logDebugM $ "List layers: " .< ll
-	lift $ logDebugM $ "Input to calculate" .< ld
-	lift $ logDebugM $ "List result calculate: " .< lc
-	lift $ logDebugM "End: calculateAdj"
+	--lift $ logDebugM $ "List layers: " .< ll
+	--lift $ logDebugM $ "Input to calculate" .< ld
+	--lift $ logDebugM $ "List result calculate: " .< lc
+	--lift $ logDebugM "End: calculateAdj"
 	return $ P.zip lh lc
 
 class ListDoubled a where
@@ -215,18 +223,18 @@ calculateAdjLD ::
 		m
 		[(HashNN,a)]
 calculateAdjLD a = do
-	lift $ logDebugM "Start:calculateAdjLD"
+	--lift $ logDebugM "Start:calculateAdjLD"
 	llhld <- mapM calculateAdj $ toLD a
-	lift $ logDebugM $ "List hashes: " .< ((fmap . fmap) fst llhld)
-	lift $ logDebugM $ "Length list calculate: " .< (P.length llhld)
+	--lift $ logDebugM $ "List hashes: " .< ((fmap . fmap) fst llhld)
+	--lift $ logDebugM $ "Length list calculate: " .< (P.length llhld)
 	-- lift $ logDebugM $ "Elements calculate:" .< 
 	let llhEa = (fmap . fmap) (\(h,ld)->(h,Endo $ fromLD ld)) llhld
 	let lha = P.foldr1 f llhEa
-	lift $ logDebugM $ "Length list calculate result: " .< (P.length lha)
+	--lift $ logDebugM $ "Length list calculate result: " .< (P.length lha)
 	let r = fmap (\(h,ea)->(h,(appEndo ea) a)) lha
-	lift $ logDebugM $ "List hashes: " .< (fmap fst r)
-	lift $ logDebugM $ "Length list endo applayed: " .< (P.length r)
-	lift $ logDebugM "End:calculateAdjLD"
+	--lift $ logDebugM $ "List hashes: " .< (fmap fst r)
+	--lift $ logDebugM $ "Length list endo applayed: " .< (P.length r)
+	--lift $ logDebugM "End:calculateAdjLD"
 	return r
 	where
 		f !xl !yl = fmap g $ P.zip xl yl
@@ -274,10 +282,10 @@ trainAdjLDL ::
 		m 
 		()
 trainAdjLDL p pe lp = do
-	lift $ logDebugM "Start: trainAdjLDL"
-	lift $ logDebugM $ "Length list data: " .< (P.length lp)
+	--lift $ logDebugM "Start: trainAdjLDL"
+	--lift $ logDebugM $ "Length list data: " .< (P.length lp)
 	mapM_ (trainAdj p pe) $ fmap (\(x,y)-> P.zip (toLD x) (toLD y)) lp
-	lift $ logDebugM "End: trainAdjLDL"
+	--lift $ logDebugM "End: trainAdjLDL"
 
 type HashNN = Hash
 
@@ -302,20 +310,25 @@ upNNGr :: (Monad m, MonadIO m, Hashable a, ListDoubled a, Eq a, MonadLoger m) =>
 		m 
 		()
 upNNGr = do
+	lift $ logDebugM "Start: upNNGr"
 	gr <- adjFst $ adjGetEnv
+	lift $ logDebugM "Pre: get graph"
 	let ln = G.labNodes gr
+	lift $ logDebugM $ "Length list node graph: " .< (P.length ln)
 	rnode <- liftIO $ getRandomElementList ln
 	let ma = fmap snd rnode
 	mapM_ (\a-> do
 		lr <- adjSnd $ calculateAdjLD $ unhashed a
 		let lnewNodes = newNodes (P.length lr) gr
+		lift $ logDebugM "Post: calculateAdjLD"
 		adjFst $ adjSetEnv 
 			(P.foldr 
-				(\(nn,(h,a)) b-> 
+				(\(nn,(h,a)) b-> id $!
 					(maybe id (\(rn,_)-> insEdge (rn,nn,h)) rnode . insNode (nn, hashed a)) b
 				) gr $ P.zip lnewNodes lr
 			) (Identity ())
 		) ma
+	lift $ logDebugM "End: upNNGr"
 
 type Replicate = Int
 
@@ -330,7 +343,10 @@ updatingNNGr :: (Monad m, MonadIO m, Hashable a, Eq a, ListDoubled a, MonadLoger
 		()
 updatingNNGr si = do
 	-- adjSnd $ trainAdjLD p pe pa i
-	mapM_ (\_->upNNGr) [0..si]
+	mapM_ (\i->do
+		upNNGr
+		lift $ logDebugM $ "Post: upNNGr: index: " .< i
+		) [0,1..si]
 
 type UpgradingInt = Int
 
@@ -361,14 +377,18 @@ upgradingNNGr ::
 		m 
 		()
 upgradingNNGr d1 d2 pa r si ui = do
+	lift $ logInfoM "Start: upgradingNNGr"  -- logDebugM
 	adjSnd $ trainAdjLD d1 d2 pa r
+	lift $ logInfoM "Post: trainAdjLD"
 	gr <- adjFst $ adjGetEnv
 	adjFst $ adjSetEnv 
 		(P.foldr (\i b->insNode (i,hashed $ snd pa) b) gr $ newNodes 1 gr) (Identity ())
-	mapM_ (\_-> do
+	mapM_ (\i-> do
 		onlyScc
 		updatingNNGr si
-		) [0..ui]
+		lift $ logDebugM $ "Post: updatingNNGr: index: " .< i  -- logDebugM
+		) [0,1..ui]
+	lift $ logInfoM "End: upgradingNNGr"  -- logDebugM
 
 onlyInGr :: (Monad m, MonadIO m, Hashable a, Eq a) => 
 	M.AdjointT 
@@ -588,21 +608,21 @@ restorationNNSccLPrimer ::
 		m 
 		[(Gr (Hashed a) HashNN,Network)]
 restorationNNSccLPrimer p pe pa = do
-	lift $ logDebugM "Start: restorationNNSccLPrimer"
+	--lift $ logDebugM "Start: restorationNNSccLPrimer"
 	--mlgr <- adjFst $ viewHistoryLeft
 	lgr <- adjNNSLliftAdjNNGr getSccArtPoint
 	--let lgr = join $ maybeToList mlgr
 	mgr <- liftIO $ getRandomElementList lgr
 	rp <- fmap (join . maybeToList) $ mapM randomPath mgr
 	let plrp = pairing $ fmap unhashed rp
-	lift $ logDebugM "Pre: trainAdjLDL"
+	--lift $ logDebugM "Pre: trainAdjLDL"
 	adjNNSLliftAdjNetworkL $ trainAdjLDL p pe plrp
 	(lr :: [(HashNN,a)]) <- adjNNSLliftAdjNetworkL $ calculateAdjLD $ fst pa
-	lift $ logDebugM $ "Length pre result: " .< (P.length lr)
+	--lift $ logDebugM $ "Length pre result: " .< (P.length lr)
 	nl <- adjNNSLliftLayers adjGetEnv
-	lift $ logDebugM $ "Layers NN: " .< nl
-	let fl = P.filter (\(h,a)-> traceShowId $ a == (snd pa)) lr
-	lift $ logDebugM $ "Length result: " .< (P.length fl)
+	--lift $ logDebugM $ "Layers NN: " .< nl
+	let fl = P.filter (\(h,a)-> a == (snd pa)) lr
+	--lift $ logDebugM $ "Length result: " .< (P.length fl)
 	rnnslp <- fmap catMaybes $ mapM (\x-> do 
 		(mn :: Maybe Network) <- adjNNSLliftAdjNetworkL $ getNN $ fst x
 		return $ do
@@ -610,7 +630,7 @@ restorationNNSccLPrimer p pe pa = do
 			n <- mn
 			return (gr,n)
 		) fl
-	lift $ logDebugM "End: restorationNNSccLPrimer"
+	--lift $ logDebugM "End: restorationNNSccLPrimer"
 	return rnnslp
 
 type RestorationCycle = Int 
@@ -650,7 +670,7 @@ restorationNNSccLPrimerUp' p pe pa rc snn r si ui = do
 		lift $ logInfoM $ "Result cyckle:" .< (IMap.size hnn')
 		return hnn'
 		) [0..rc]
-	lift $ logInfoM "Pre: onlyInGr'"
+	--lift $ logInfoM "Pre: onlyInGr'"
 	adjNNSLliftAdjNNGr $ onlyInGr
 	lift $ logInfoM "End: restorationNNSccLPrimerUp'"
 	return $ hnn
@@ -817,7 +837,7 @@ restorationPow ::
 	UpgradingInt ->
 	M.AdjointT f g m ()
 restorationPow p pe (ta :: a) rc snn r si ui = do
-	lift $ logDebugM "Start: restorationPow"
+	--lift $ logDebugM "Start: restorationPow"
 	(mplhl :: Maybe ([(Gr (Hashed a) HashNN)],[(Gr (Hashed a) HashNN)])) <- 
 		liftNNSccListAdjA $ adjNNSLliftHAG $ adjSnd viewHPairLeft -- viewHistoryLeft
 	--mlhgr <- liftNNSccListAdjGr $ adjNNSLliftHAG $ viewHistoryLeft
@@ -856,7 +876,7 @@ restorationPow p pe (ta :: a) rc snn r si ui = do
 			liftNNSccListAdjGr @_ @_ @a $ restorationNNSccLPrimerUpSafe r
 			) mr
 		) mplhl
-	lift $ logDebugM "End: restorationPow"
+	--lift $ logDebugM "End: restorationPow"
 
 restorationPowUp :: 
 	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a,
@@ -1006,11 +1026,11 @@ safeTrueAssumptuon ::
 	HashMap a ([(PowGr a,PowGr a, HashNNGr,[[[PackedNeuron]]])]) ->
 	M.AdjointT f g m (IntMap [(HashSccR,HashSccC)])
 safeTrueAssumptuon (ta :: a) hma = do
-	lift $ logInfoM "Start: safeTrueAssumptuon"
-	lift $ logInfoM $ "true value: " .< ta
+	--lift $ logInfoM "Start: safeTrueAssumptuon"
+	--lift $ logInfoM $ "true value: " .< ta
 	let thma = resultAssumptionTrue ta hma
 	hm <- fmap (f . fmap snd . Map.toList) $ mapM (\l-> do
-		lift $ logInfoM "safe assumptions"
+		--lift $ logInfoM "safe assumptions"
 		fmap f $ mapM (\ (gr1, gr2, nngr, lpn) -> do
 			mgr <- liftMapGrAdj $ adjGetEnv
 			let mgr' = Map.insertWith (++) gr1 [(gr2,hash nngr)] mgr
@@ -1023,7 +1043,7 @@ safeTrueAssumptuon (ta :: a) hma = do
 			return $ IMap.singleton (hash nngr) [(hash gr1, hash gr2)]
 			) l
 		) thma
-	lift $ logInfoM "End: safeTrueAssumptuon"
+	--lift $ logInfoM "End: safeTrueAssumptuon"
 	return hm
 	where
 		f = P.foldr (IMap.unionWith (\y1 y2->y1++y2)) IMap.empty
@@ -1076,10 +1096,10 @@ safeTrueAssumptuonFull ::
 	HashMap a ([(PowGr a,PowGr a, HashNNGr,[[[PackedNeuron]]])]) ->
 	M.AdjointT f g m ()
 safeTrueAssumptuonFull ta hma = do
-	lift $ logInfoM "Start: safeTrueAssumptuonFull"
+	--lift $ logInfoM "Start: safeTrueAssumptuonFull"
 	o <- safeTrueAssumptuon ta hma
 	liftIMapNNRAdj $ safeTrueAssumptuonNNRC o
-	lift $ logInfoM "End: safeTrueAssumptuonFull"
+	--lift $ logInfoM "End: safeTrueAssumptuonFull"
 
 type AllResult a = 
 	HashMap a ([(PowGr a,PowGr a, HashNNGr,[[[PackedNeuron]]])])

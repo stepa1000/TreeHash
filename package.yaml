@@ -33,7 +33,7 @@ dependencies:
 - unordered-containers
 - aeson
 - bytestring
-- bpann
+- bpann-my
 
 ghc-options:
 - -Wall
