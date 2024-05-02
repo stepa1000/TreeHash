@@ -49,8 +49,8 @@ import Control.Base.Comonad
 import Control.Core.Biparam
 import Control.Core.Composition
 import Data.Functor.Identity
-import Data.History
-import Data.NodeHash
+--import Data.History
+--import Data.NodeHash
 import Other.Utils
 
 data LogLevel

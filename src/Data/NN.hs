@@ -103,7 +103,7 @@ creatRandomNetworksAdj j = do
 		return $ createRandomNetwork i l
 		) [0..j]
 
-creatRandomNetworksAdj_ :: (Monad m, MonadIO m) => 
+creatRandomNetworksAdj_ :: (Monad m, MonadIO m, MonadLoger m) => 
 	Int ->
 	M.AdjointT 
 		AdjNetworkL 
@@ -111,7 +111,17 @@ creatRandomNetworksAdj_ :: (Monad m, MonadIO m) =>
 		m 
 		()
 creatRandomNetworksAdj_ j = do
+	lift $ logDebugM "*** Start: creatRandomNetworksAdj_"
 	ln <- creatRandomNetworksAdj j
+	lift $ logDebugM "Start: Neiron desctiptions"
+	mapM_ (\l2-> mapM_ (\l1-> mapM_ (\(n,_)->do
+		lift $ logDebugM $ "fun0: " .< ((fun n) 0)
+		lift $ logDebugM $ "fun0.5: " .< ((fun n) 0.5)
+		lift $ logDebugM $ "fun1: " .< ((fun n) 1)
+		lift $ logDebugM $ "w: " .< (ws n)
+		) l1) l2) ln
+	lift $ logDebugM "End: Neiron desctiptions"
+	lift $ logDebugM "*** End: creatRandomNetworksAdj_"
 	-- lnold <- adjFst $ adjGetEnv
 	adjFst $ adjSetEnv ln (Identity ())
 
@@ -131,10 +141,17 @@ trainAdj p pe ldd = do
 	lnold <- adjFst $ adjGetEnv
 	lift $ logDebugM $ "Length list NN:" .< (P.length lnold)
 	let ln = P.map (\n-> train i e n ldd) lnold
+	lift $ logDebugM $ "Length list result NN:" .< (P.length lnold)
+	lift $ logDebugM "Start: Neiron desctiptions in trainAdj"
+	mapM_ (\l2-> mapM_ (\l1-> mapM_ (\(n,_)->do
+		lift $ logDebugM $ "fun0: " .< ((fun n) 0)
+		lift $ logDebugM $ "fun0.5: " .< ((fun n) 0.5)
+		lift $ logDebugM $ "fun1: " .< ((fun n) 1)
+		lift $ logDebugM $ "w: " .< (ws n)
+		) l1) l2) ln
+	lift $ logDebugM "End: Neiron desctiptions in trainAdj"
 	adjFst $ adjSetEnv ln (Identity ())
 	lift $ logDebugM "End: trainAdj"
-
-
 
 trainAdjP :: (Monad m, MonadIO m) => 
 	(Double,Double) ->
@@ -166,8 +183,20 @@ calculateAdj ld = do
 	lift $ logDebugM "Start: calculateAdj"
 	lnold <- adjFst $ adjGetEnv
 	lift $ logDebugM $ "Length list NN: " .< (P.length lnold)
+	lift $ logDebugM "Start: Neiron desctiptions"
+	mapM_ (\l2-> mapM_ (\l1-> mapM_ (\(n,_)->do
+		lift $ logDebugM $ "fun0: " .< ((fun n) 0)
+		lift $ logDebugM $ "fun0.5: " .< ((fun n) 0.5)
+		lift $ logDebugM $ "fun1: " .< ((fun n) 1)
+		lift $ logDebugM $ "w: " .< (ws n)
+		) l1) l2) lnold
+	lift $ logDebugM "End: Neiron desctiptions"
 	let lh = fmap (hash . packNetwork) lnold
 	let lc = fmap (\n-> calculate n ld) lnold
+	ll <- adjSnd $ adjGetEnv
+	lift $ logDebugM $ "List layers: " .< ll
+	lift $ logDebugM $ "Input to calculate" .< ld
+	lift $ logDebugM $ "List result calculate: " .< lc
 	lift $ logDebugM "End: calculateAdj"
 	return $ P.zip lh lc
 
@@ -188,12 +217,14 @@ calculateAdjLD ::
 calculateAdjLD a = do
 	lift $ logDebugM "Start:calculateAdjLD"
 	llhld <- mapM calculateAdj $ toLD a
+	lift $ logDebugM $ "List hashes: " .< ((fmap . fmap) fst llhld)
 	lift $ logDebugM $ "Length list calculate: " .< (P.length llhld)
 	-- lift $ logDebugM $ "Elements calculate:" .< 
 	let llhEa = (fmap . fmap) (\(h,ld)->(h,Endo $ fromLD ld)) llhld
 	let lha = P.foldr1 f llhEa
 	lift $ logDebugM $ "Length list calculate result: " .< (P.length lha)
 	let r = fmap (\(h,ea)->(h,(appEndo ea) a)) lha
+	lift $ logDebugM $ "List hashes: " .< (fmap fst r)
 	lift $ logDebugM $ "Length list endo applayed: " .< (P.length r)
 	lift $ logDebugM "End:calculateAdjLD"
 	return r
@@ -570,7 +601,7 @@ restorationNNSccLPrimer p pe pa = do
 	lift $ logDebugM $ "Length pre result: " .< (P.length lr)
 	nl <- adjNNSLliftLayers adjGetEnv
 	lift $ logDebugM $ "Layers NN: " .< nl
-	let fl = P.filter (\(h,a)-> a == (snd pa)) lr
+	let fl = P.filter (\(h,a)-> traceShowId $ a == (snd pa)) lr
 	lift $ logDebugM $ "Length result: " .< (P.length fl)
 	rnnslp <- fmap catMaybes $ mapM (\x-> do 
 		(mn :: Maybe Network) <- adjNNSLliftAdjNetworkL $ getNN $ fst x
@@ -610,6 +641,7 @@ restorationNNSccLPrimerUp' p pe pa rc snn r si ui = do
 		when (b || (P.null lhscchnn)) $ do
 			adjNNSLliftAdjNetworkL $ creatRandomNetworksAdj_ snn
 			adjNNSLliftNNGr $ adjSetEnv G.empty (Identity ())
+			lift $ logInfoM "Pre: upgradingNNGr"
 			adjNNSLliftAdjNNGr $ upgradingNNGr p pe pa r si ui
 		hnn' <- fmap unionScc $ mapM (\(hscc,hnn)->do
 			let n = packNetwork hnn

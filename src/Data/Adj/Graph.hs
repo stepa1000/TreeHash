@@ -21,6 +21,7 @@ import Data.Graph.Inductive.Query.ArtPoint as G
 import Data.ByteString as B
 import Data.Word
 import Data.Aeson as Aeson
+import Debug.Trace
 import Control.Monad.Trans.Adjoint as M
 import Data.Functor.Adjunction
 import Control.Monad.Reader
@@ -129,10 +130,12 @@ getSccGrGraph = do
 sccArtPoint :: Gr a b -> [Gr a b]
 sccArtPoint gr 
 	| G.isEmpty gr = []
+	| P.length (labNodes gr) == 1 = []
 sccArtPoint gr = (f $ P.foldr (\a b->G.delNode a b) gr artP)
 	where
 		f grn 
 			| G.isEmpty grn = [] 
+			| P.length (labNodes grn) == 1 = [grn]
 		f grn = join $ fmap (\l-> sccArtPoint $ subgraph l grn) lp
 			where
 				lp = G.scc grn
