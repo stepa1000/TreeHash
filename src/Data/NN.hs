@@ -24,9 +24,12 @@ import Data.IntMap as IMap
 import Data.Maybe
 import Data.Graph.Inductive.PatriciaTree as G
 import Data.Graph.Inductive.Graph as G
+-- import Data.Graph.Inductive.Monad.IOArray as G
+-- import Data.Graph.Inductive.Monad as G
 import Data.ByteString as B
 import Data.Word
 import Data.Aeson as Aeson
+import Data.Time.Clock
 import Debug.Trace
 import Control.Monad.Trans.Adjoint as M
 import Data.Functor.Adjunction
@@ -38,6 +41,7 @@ import Control.Comonad.Env
 import Control.Monad.IO.Class
 import Control.Concurrent.MVar
 import Control.Concurrent
+import Control.Seq
 import GHC.Generics
 import AI.BPANN
 import Data.Monoid
@@ -313,8 +317,11 @@ upNNGr = do
 	lift $ logDebugM "Start: upNNGr"
 	gr <- adjFst $ adjGetEnv
 	lift $ logDebugM "Pre: get graph"
-	let ln = G.labNodes gr
+	gct1 <- liftIO getCurrentTime 
+	let ln = withStrategy (seqList rseq) $ G.labNodes gr
 	lift $ logDebugM $ "Length list node graph: " .< (P.length ln)
+	gct2 <- liftIO getCurrentTime 
+	lift $ logDebugM $ "diff time on labNodes: " .< (diffUTCTime gct2 gct1)
 	rnode <- liftIO $ getRandomElementList ln
 	let ma = fmap snd rnode
 	mapM_ (\a-> do
@@ -322,7 +329,7 @@ upNNGr = do
 		let lnewNodes = newNodes (P.length lr) gr
 		lift $ logDebugM "Post: calculateAdjLD"
 		adjFst $ adjSetEnv 
-			(P.foldr 
+			(withStrategy rseq $ P.foldr 
 				(\(nn,(h,a)) b-> id $!
 					(maybe id (\(rn,_)-> insEdge (rn,nn,h)) rnode . insNode (nn, hashed a)) b
 				) gr $ P.zip lnewNodes lr
@@ -652,7 +659,7 @@ restorationNNSccLPrimerUp' ::
 		(IntMap ([[PackedNeuron]],[Gr (Hashed a) HashNN]))
 restorationNNSccLPrimerUp' p pe pa rc snn r si ui = do
 	lift $ logInfoM "Start: restorationNNSccLPrimerUp'"
-	hnn <- fmap (unionScc . traceShowId)
+	hnn <- fmap unionScc
 		$ mapM (\_-> do
 		(b :: Bool) <- adjNNSLliftAdjNetworkL lnnull
 		lift $ logInfoM "Pre: restorationNNSccLPrimer"
@@ -677,7 +684,8 @@ restorationNNSccLPrimerUp' p pe pa rc snn r si ui = do
 
 unionScc = P.foldr (IMap.unionWith (\(x1,y1) (_,y2)->(x1,y1++y2))) IMap.empty
 
-restorationNNSccLPrimerUpSafe :: (Monad m, MonadIO m, Hashable a, ListDoubled a, Eq a) => 
+restorationNNSccLPrimerUpSafe :: 
+	(Monad m, MonadIO m, MonadLoger m, Hashable a, ListDoubled a, Eq a) => 
 	(IntMap ([[PackedNeuron]],[Gr (Hashed a) HashNN])) ->
 	M.AdjointT 
 		(NNSccListAdjL a) 
@@ -685,6 +693,7 @@ restorationNNSccLPrimerUpSafe :: (Monad m, MonadIO m, Hashable a, ListDoubled a,
 		m 
 		()
 restorationNNSccLPrimerUpSafe impngr = do
+	lift $ logInfoM "Start: restorationNNSccLPrimerUpSafe"
 	sequenceA_ $ IMap.mapWithKey (\knn (pn,hscc)->do
 		im <- adjSnd $ adjFst $ adjGetEnv
 		let im' = IMap.insertWith (\(x1,y1) (_,y2)->(x1,y1++y2)) knn (pn,[hash hscc]) im
@@ -694,8 +703,10 @@ restorationNNSccLPrimerUpSafe impngr = do
 	lgr <- fmap (fmap snd . IMap.toList . P.fold) $ mapM (\(pn,gr)->do
 		return $ IMap.singleton (hash gr) gr
 		) impngr
+	lift $ logInfoM $ "!!! Length list scc:" .< (P.length lgr)
 	adjFst $ addToLHistoryLeft $ join lgr
 	adjSnd $ adjSnd $ adjFst $ adjSetEnv G.empty (Identity ())
+	lift $ logInfoM "End: restorationNNSccLPrimerUpSafe"
 
 type PowGr a = Gr a [[PackedNeuron]]
 
@@ -894,8 +905,9 @@ restorationPowUp ::
 	M.AdjointT f g m ()
 restorationPowUp p pe pa rc snn r si ui = do
 	lift $ logInfoM "Start: restorationPowUp"
-	liftNNSccListAdjA $ 
+	lr <- liftNNSccListAdjA $ 
 		restorationNNSccLPrimerUp' p pe pa rc snn r si ui
+	liftNNSccListAdjA $ restorationNNSccLPrimerUpSafe lr
 	lift $ logInfoM "Post: restorationNNSccLPrimerUp'"
 	restorationPow p pe (fst pa) rc snn r si ui
 	lift $ logInfoM "End: restorationPowUp"
@@ -1007,9 +1019,9 @@ type MapGrAdjL f a = (Env (MapGr a)) :.: f -- (NNSccListAdjL a)
 
 type MapGrAdjR g a = g :.: (Reader (MapGr a)) -- (NNSccListAdjR a)
 
-type HashSccR = HashScc
+type HashSccR = HashScc -- ReasonGr a
 
-type HashSccC = HashScc
+type HashSccC = HashScc -- ConsequenceGr a
 
 class ClassMapGrAdj f g a where
 	liftMapGrAdj :: (Monad m, Hashable a, Eq a) =>
@@ -1162,7 +1174,7 @@ updateAssumptionPost ::
 updateAssumptionPost p pe pa snn r si ui sar pr = do
 	lift $ logInfoM "Start: updateAssumptionPost"
 	safeTrueAssumptuonFull (snd pa) (fst pr)
-	lift $ logInfoM $ traceShowId "Post: safeTrueAssumptuonFull"
+	lift $ logInfoM "Post: safeTrueAssumptuonFull"
 	restorationPowUp p pe pa sar snn r si ui 
 	lift $ logInfoM "End: updateAssumptionPost"
 
@@ -1282,6 +1294,25 @@ data DataNNSLPow a = DataNNSLPow
 	, imrcnn :: IMapNNRC
 	, nnslpConf :: ConfNN
 } deriving (Generic, ToJSON, FromJSON)
+
+unionDNNSLP :: Eq a => DataNNSLPow a -> DataNNSLPow a -> DataNNSLPow a
+unionDNNSLP d1 d2 = DataNNSLPow
+	( DataNN 
+		(nnLayers $ dnnGr d1)
+		(IMap.unionWith (\(x,lx) (y,ly)->(x,lx++ly)) 
+			(nnMap $ dnnGr d1) (nnMap $ dnnGr d2))
+	)
+	( DataNN 
+		(nnLayers $ dnnA d1)
+		(IMap.unionWith (\(x,lx) (y,ly)->(x,lx++ly)) 
+			(nnMap $ dnnA d1) (nnMap $ dnnA d2))
+	)
+	( Map.unionWith (\lx ly->lx++ly) (hmrcgr d1) (hmrcgr d2)
+	)
+	(IMap.unionWith (\lx ly->lx++ly) 
+			(imrcnn d1) (imrcnn d2)
+	)
+	(nnslpConf d1)
 
 getDataNNSLPow :: 
 	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a,

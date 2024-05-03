@@ -92,7 +92,7 @@ instance ClassNNSLPowAdj (NNAdjL a) (NNAdjR a) a where
 instance NNSccListAdj (NNAdjL a) (NNAdjR a) a where
 	liftNNSccListAdj = liftNNSccListAdjA
 
-lernToNN :: (Hashable a, Show a, ToJSON a, ListDoubled a) => 
+lernToNN :: (Hashable a, Show a, ToJSON a, FromJSON a, ListDoubled a) => 
 	MVar String -> SettingNN -> [(a,a)] -> AdjunctorNN a ()
 lernToNN mvs spw lpw = do
 	-- like lernToMemory
@@ -102,17 +102,18 @@ lernToNN mvs spw lpw = do
 		lift $ logInfoM $ "consequence:" .< (Map.keys $ snd pr)
 		updateAPost npw pr
 		e <- liftIO $ tryTakeMVar mvs
-		if e == (Just "s")
-			then do				
-				dm2 <- getDataNNSLPow $ fst npw
-				liftIO $ encodeFile (fileNNForState spw) dm2
-				mapM (\gr->do
-					liftIO $ P.writeFile ((fileNNGr spw) ++ ("/") ++ (show $ hash gr) ++ ".dot") $
-						showDot $ fglToDotUnlabeled gr
-					) $ Map.keys $ hmrcgr dm2
-				liftIO $ print "safe sucsess"
-				return ()
-			else return ()
+		--if e == (Just "s")
+		--	then do				
+		dm2 <- getDataNNSLPow $ fst npw
+		(Just dmn) <- liftIO $ decodeFileStrict @(DataNNSLPow a) (fileNNForState spw)
+		liftIO $ encodeFile (fileNNForState spw) $ unionDNNSLP dm2 dmn
+		mapM (\gr->do
+			liftIO $ P.writeFile ((fileNNGr spw) ++ ("/") ++ (show $ hash gr) ++ ".dot") $
+				showDot $ fglToDotUnlabeled gr
+			) $ Map.keys $ hmrcgr dm2
+		liftIO $ print "safe sucsess"
+		return ()
+		--	else return ()
 		) lpw
 
 data SettingNN = SettingNN 
@@ -145,10 +146,10 @@ initNNS spw = do
 					(0.5,1.5)
 					(0.0001,0.001)
 					100
-					5
-					5
-					5
-					5
+					3
+					3
+					3
+					3
 					)
 
 instance ListDoubled Word8 where
@@ -193,6 +194,8 @@ runAdjunctorNN = void .
 runLTNN :: SettingNN -> IO () 
 runLTNN snn = do
 	mvs <- newEmptyMVar 
+	forkIO $ runAdjunctorNN $ 
+		startlTNN mvs snn
 	forkIO $ runAdjunctorNN $ 
 		startlTNN mvs snn
 	str <- P.getLine
