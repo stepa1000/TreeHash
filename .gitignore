@@ -2,3 +2,5 @@
 data/
 *~
 TreeHash.cabal
+*.hs
+/random-1.2.1.2
