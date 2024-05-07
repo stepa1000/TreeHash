@@ -78,6 +78,34 @@ getNN h = do
 	ln <- adjFst $ adjGetEnv
 	--lift $ logDebugM $ "Length list get NN: " .< (P.length ln) ==
 	let mn = P.find (\n-> hash (packNetwork n) == h) ln
+	--lift $ logDebugM $ "find NN: " .< (isJust mn)
+	--lift $ logDebugM $ "Length list set NN: " .< (P.length ln')
+	--lift $ logDebugM "End: getNN"
+	return mn
+
+setNN :: (Monad m, MonadIO m, MonadLoger m) =>
+	Network -> 
+	M.AdjointT 
+		AdjNetworkL 
+		AdjNetworkR
+		m
+		()
+setNN n = do
+	ln <- adjFst $ adjGetEnv
+	adjFst $ adjSetEnv (n:ln) (Identity ())
+
+deleteNN :: (Monad m, MonadIO m, MonadLoger m) =>
+	Hash -> 
+	M.AdjointT 
+		AdjNetworkL 
+		AdjNetworkR
+		m
+		(Maybe Network)
+deleteNN h = do
+	--lift $ logDebugM "Start: getNN"
+	ln <- adjFst $ adjGetEnv
+	--lift $ logDebugM $ "Length list get NN: " .< (P.length ln) ==
+	let mn = P.find (\n-> hash (packNetwork n) == h) ln
 	let ln' = P.filter (\n-> not $ hash (packNetwork n) == h) ln
 	--lift $ logDebugM $ "find NN: " .< (isJust mn)
 	--lift $ logDebugM $ "Length list set NN: " .< (P.length ln')
@@ -419,6 +447,17 @@ type NNPrimeAdjL a = (Env IntMapPrimeNN) :.: (NNGrAdjL a)
 
 type NNPrimeAdjR a = (NNGrAdjR a) :.: (Reader IntMapPrimeNN)
 
+getNNMI :: (Monad m, MonadIO m, MonadLoger m) =>
+	Hash -> 
+	M.AdjointT 
+		(NNPrimeAdjL a) 
+		(NNPrimeAdjR a)
+		m
+		(Maybe Network)
+getNNMI h = do
+	ln <- adjFst $ adjGetEnv
+	return $ IMap.lookup h ln
+
 safeNNScc :: (Monad m, MonadIO m, Hashable a, Eq a) => 
 	M.AdjointT 
 		(NNPrimeAdjL a) 
@@ -460,21 +499,48 @@ safeCalculate a = do
 	return lha
 
 getMidalsNN :: 
-	(	Monad m, MonadIO m,
-		MonadLoger m
+	(	Monad m, MonadIO m, Eq a, ListDoubled a,
+		MonadLoger m, Hashable a
 	) => 
 	(a,a) ->
 	M.AdjointT 
 		(NNPrimeAdjL a) 
 		(NNPrimeAdjR a)
 		m 
-		[[PackedNeuron]]
+		([[PackedNeuron]],[Hash])
 getMidalsNN (x,y) = do
 	lhy <- fmap (P.filter (\(h,r)->r == y)) $ safeCalculate x
-	lpn <- mapM (\(h,_)-> adjSnd $ adjSnd $ fmap $ getNN h) lhy
+	mlpn <- mapM (\(h,_)-> (fmap . fmap) packNetwork $ getNNMI h) lhy
+	let lpn = catMaybes mlpn
 	let lmpn = fmap (\pn-> (pn,sum $ fmap (\pn2->metric pn pn2) lpn)) lpn
-	let minM = getMin $ foldMap Min $ fmap snd lmpn
-	return $ join $ maybeToList $ fmap fst $ P.find (\(_,s)->s == minM) lmpn
+	let minM = P.foldl1 (\x y-> if x < y then x else y) $ fmap snd lmpn
+	let pn = join $ maybeToList $ fmap fst $ P.find (\(_,s)->s == minM) lmpn
+	return 
+		( pn,
+		  P.filter (\h->h /= (hash pn)) $ fmap fst lhy
+		)
+
+getExternalNN :: 
+	(	Monad m, MonadIO m, Eq a, ListDoubled a,
+		MonadLoger m, Hashable a
+	) => 
+	(a,a) ->
+	M.AdjointT 
+		(NNPrimeAdjL a) 
+		(NNPrimeAdjR a)
+		m 
+		([[PackedNeuron]],[Hash])
+getExternalNN (x,y) = do
+	lhy <- fmap (P.filter (\(h,r)->r == y)) $ safeCalculate x
+	mlpn <- mapM (\(h,_)-> (fmap . fmap) packNetwork $ getNNMI h) lhy
+	let lpn = catMaybes mlpn
+	let lmpn = fmap (\pn-> (pn,sum $ fmap (\pn2->metric pn pn2) lpn)) lpn
+	let minM = P.foldl1 (\x y-> if x < y then y else x) $ fmap snd lmpn
+	let pn = join $ maybeToList $ fmap fst $ P.find (\(_,s)->s == minM) lmpn
+	return 
+		( pn,
+		  P.filter (\h->h /= (hash pn)) $ fmap fst lhy
+		)
 
 -- MemAdjL ???
 type NNSccListAdjL a = (HistoryAdjL [(Gr (Hashed a) HashNN)]) :.: (NNPrimeAdjL a) 

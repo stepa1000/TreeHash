@@ -132,12 +132,14 @@ data HandlerSysCreatRandomNetworks sys = HandlerSysCreatRandomNetworks
 unArrowMonad (ArrowMonad a) = a
 
 sysCreatRandomNetworks :: 
-	(Arrow (ArrSys sys), ArrowApply (ArrSys sys)) =>
+	( Arrow (ArrSys sys), ArrowApply (ArrSys sys), Enum (SysSizeNN sys), 
+	  Num (SysSizeNN sys)
+	) =>
 	HandlerSysCreatRandomNetworks sys ->
 	ArrSys sys
 		(SysSizeNN sys)
 		()
-sysCreatRandomNetworks sysGetNN = proc snn -> do
+sysCreatRandomNetworks sys = proc snn -> do
 	ll <- sysGetLayers sys -< ()
 	ln <- unArrowMonad $ mapM (\_->ArrowMonad $ proc _ -> do
 		s <- sysRandomSeed sys -< ()
@@ -156,8 +158,8 @@ type family SysAttemptTrain sys
 
 data HandlerSysTrain sys = HandlerSysTrain
 	{ sysGetCNetwork :: ArrSys sys () (SysCNetwork sys)
-	, sysSetCNetwork :: ArrSys sys (SysCNetwork sys) ()
-	, sysTrain :: 
+	, sysSetCNetworkT :: ArrSys sys (SysCNetwork sys) ()
+	, sysTrainT :: 
 		ArrSys sys 
 			( SysAttemptTrain sys
 			, SysAlfa sys
@@ -189,9 +191,9 @@ sysTrain sys = proc (alfa,errorT,attt,ld) -> do
 	cn <- sysGetCNetwork sys -< ()
 	cn2 <- sysCatMaybes sys <<< sysMapCN sys
 		(proc n -> do
-			sysTrain -< (attt,alfa,errorT,n,ld)
+			sysTrainT sys -< (attt,alfa,errorT,n,ld)
 		) -<< cn
-	sysSetCNetwork sys -< cn2
+	sysSetCNetworkT sys -< cn2
 
 data HandlerSysTrainP sys = HandlerSysTrainP
 	{ sysGetCNetworkTP :: ArrSys sys () (SysCNetwork sys)
@@ -227,18 +229,51 @@ sysTrainP ::
 		)
 		()
 sysTrainP sys = proc (alfa,errorT,attt,lld) -> do
-	cn <- sysGetCNetwork sys -< ()
-	cn2 <- (sysCatMaybes sys) <<< (sysMapCN sys)
+	cn <- sysGetCNetworkTP sys -< ()
+	cn2 <- (sysCatMaybesTP sys) <<< (sysMapCNTP sys)
 		(proc n -> do
 			unArrowMonad $ P.foldrM (\ld mn'->ArrowMonad $ (proc _ -> do
 					n2 <- sysFromJust sys -< mn'
-					sysTrain -< (attt,alfa,errorT,n,ld)
+					sysTrainTP sys -< (attt,alfa,errorT,n,ld)
 				) <+> (proc _ -> do
-					sysTrain -< (attt,alfa,errorT,n,ld)	
+					sysTrainTP sys -< (attt,alfa,errorT,n,ld)	
 				)
 				) (Just n) lld -<< ()
 		) -<< cn
-	sysSetCNetwork sys -< cn2
+	sysSetCNetworkTP sys -< cn2
+
+data HandlerSysCalcylate sys = HandlerSysCalcylate
+	{ sysGetCNetworkC :: ArrSys sys () (SysCNetwork sys)
+	, sysHashNetworkC :: ArrSys sys (SysNetwork sys) (SysHash sys)
+	, sysCalculateC :: ArrSys sys (SysNetwork sys,[SysTrainData sys]) [SysTrainData sys]
+	, sysMapC :: forall a b.
+		ArrSys sys a b ->
+		ArrSys sys (SysContainer sys a) (SysContainer sys b)
+	, sysZipC :: forall a b.
+		ArrSys sys 
+			(SysContainer sys a, SysContainer sys b)
+			(SysContainer sys (a,b))
+}
+
+sysCalculate :: 
+	(Arrow (ArrSys sys), ArrowApply (ArrSys sys)) =>
+	HandlerSysCalcylate sys ->
+	ArrSys sys
+		[SysTrainData sys]
+		(SysContainer sys (SysHash sys,[SysTrainData sys]))
+sysCalculate sys = proc ld -> do
+	cn <- sysGetCNetworkC sys -< ()
+	sysZipC sys $
+		((sysMapC sys)
+			( proc n -> do
+				sysHashNetworkC sys -< n
+			)
+			) &&& 
+		((sysMapC sys)
+			( proc n -> do
+				sysCalculateC sys -< (n,ld)
+			)
+		) -<< cn
 
 {-}
 calculateAdj :: 
