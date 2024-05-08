@@ -8,6 +8,12 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE StarIsType #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 
 module Data.NN where
 
@@ -19,6 +25,7 @@ import System.Random
 import Data.Hashable
 import Data.HashSet as Set
 import Data.HashMap.Lazy as Map
+import Data.Map as OMap
 import Data.Tree as Tree
 import Data.IntMap as IMap
 import Data.Maybe
@@ -31,6 +38,7 @@ import Data.Word
 import Data.Aeson as Aeson
 import Data.Time.Clock
 import Data.Semigroup
+import Data.Proxy
 import Debug.Trace
 import Control.Monad.Trans.Adjoint as M
 import Data.Functor.Adjunction
@@ -44,6 +52,7 @@ import Control.Concurrent.MVar
 import Control.Concurrent
 import Control.Seq
 import GHC.Generics
+import GHC.TypeNats
 import AI.BPANN
 import Data.Monoid
 import Control.Base.Comonad
@@ -453,7 +462,7 @@ getNNMI :: (Monad m, MonadIO m, MonadLoger m) =>
 		(NNPrimeAdjL a) 
 		(NNPrimeAdjR a)
 		m
-		(Maybe Network)
+		(Maybe ([[PackedNeuron]],[HashSccGr]))
 getNNMI h = do
 	ln <- adjFst $ adjGetEnv
 	return $ IMap.lookup h ln
@@ -498,7 +507,7 @@ safeCalculate a = do
 	adjSnd $ adjSnd $ adjFst $ adjSetEnv ln (Identity ())
 	return lha
 
-getMidalsNN :: 
+getMapNN :: 
 	(	Monad m, MonadIO m, Eq a, ListDoubled a,
 		MonadLoger m, Hashable a
 	) => 
@@ -507,40 +516,33 @@ getMidalsNN ::
 		(NNPrimeAdjL a) 
 		(NNPrimeAdjR a)
 		m 
-		([[PackedNeuron]],[Hash])
-getMidalsNN (x,y) = do
+		(Map Double [[PackedNeuron]])
+getMapNN (x,y) = do
 	lhy <- fmap (P.filter (\(h,r)->r == y)) $ safeCalculate x
-	mlpn <- mapM (\(h,_)-> (fmap . fmap) packNetwork $ getNNMI h) lhy
-	let lpn = catMaybes mlpn
-	let lmpn = fmap (\pn-> (pn,sum $ fmap (\pn2->metric pn pn2) lpn)) lpn
-	let minM = P.foldl1 (\x y-> if x < y then x else y) $ fmap snd lmpn
-	let pn = join $ maybeToList $ fmap fst $ P.find (\(_,s)->s == minM) lmpn
-	return 
-		( pn,
-		  P.filter (\h->h /= (hash pn)) $ fmap fst lhy
-		)
+	mlpn <- fmap catMaybes $ mapM (\(h,_)-> (fmap . fmap) fst $ getNNMI h) lhy
+	return $ P.fold $ fmap (\pn-> OMap.singleton 
+		(sum $ fmap (\pn2-> metric pn pn2) mlpn)
+		pn
+		) mlpn
 
-getExternalNN :: 
+getLikeNN :: 
 	(	Monad m, MonadIO m, Eq a, ListDoubled a,
 		MonadLoger m, Hashable a
 	) => 
-	(a,a) ->
 	M.AdjointT 
 		(NNPrimeAdjL a) 
 		(NNPrimeAdjR a)
 		m 
-		([[PackedNeuron]],[Hash])
-getExternalNN (x,y) = do
-	lhy <- fmap (P.filter (\(h,r)->r == y)) $ safeCalculate x
-	mlpn <- mapM (\(h,_)-> (fmap . fmap) packNetwork $ getNNMI h) lhy
-	let lpn = catMaybes mlpn
-	let lmpn = fmap (\pn-> (pn,sum $ fmap (\pn2->metric pn pn2) lpn)) lpn
-	let minM = P.foldl1 (\x y-> if x < y then y else x) $ fmap snd lmpn
-	let pn = join $ maybeToList $ fmap fst $ P.find (\(_,s)->s == minM) lmpn
-	return 
-		( pn,
-		  P.filter (\h->h /= (hash pn)) $ fmap fst lhy
-		)
+		(Map Double (HashNN,HashNN))  -- IMap, ListNetwork
+getLikeNN = do
+	mi <- adjFst adjGetEnv
+	ln <- adjSnd $ adjSnd $ adjFst adjGetEnv
+	return $ P.fold $ fmap (\(pn,_)-> P.fold $ 
+		fmap (\n-> OMap.singleton 
+			(metric (packNetwork n) pn) 
+			(hash pn, hash (packNetwork n))
+			) ln
+		) mi
 
 -- MemAdjL ???
 type NNSccListAdjL a = (HistoryAdjL [(Gr (Hashed a) HashNN)]) :.: (NNPrimeAdjL a) 
@@ -1267,6 +1269,347 @@ updateAssumptionPost p pe pa snn r si ui sar pr = do
 	lift $ logInfoM "Post: safeTrueAssumptuonFull"
 	restorationPowUp p pe pa sar snn r si ui 
 	lift $ logInfoM "End: updateAssumptionPost"
+
+type Recion0AdjL a = 
+	IMapNNRCAdjL 
+		(MapGrAdjL 
+			( NNSLPowAdjL 
+				( NNSccListAdjL a
+				) 
+				a
+			) 
+			a)
+
+type Recion0AdjR a = 
+	IMapNNRCAdjR
+		(MapGrAdjR
+			( NNSLPowAdjR 
+				( NNSccListAdjR a
+				) 
+				a
+			) 
+			a)
+
+-- NNSLPowAdjL f a = (NNSccListAdjL (PowGr a)) :.: f
+
+type RecionNAdjL f a = 
+	IMapNNRCAdjL 
+		(MapGrAdjL 
+			( NNSLPowAdjL 
+				f
+				a -- n + 1 :: PowGr a
+			) 
+			a) -- n + 1 :: PowGr a
+{-}
+type UnRecionNAdjL f a b = 
+	(Env IMapNNRC) 
+		( (Env (MapGr a))
+			( (NNSccListAdjL (PowGr a)) (f b)
+			)
+		)
+-}
+type RecionNAdjR g a = 
+	IMapNNRCAdjR
+		(MapGrAdjR
+			( NNSLPowAdjR 
+				g
+				a
+			) 
+			a)
+
+type family RecoinPowGr (b :: Bool) (n :: Nat) a
+
+type instance RecoinPowGr True n a = a
+
+type instance RecoinPowGr False n a = PowGr (RecoinPowGr (n <=? 0) (n - 1) a)
+
+type family FRecionAdjL (b :: Bool) (n :: Nat) a :: * -> *
+
+type family FRecionAdjR (b :: Bool) (n :: Nat) a :: * -> *
+
+type instance FRecionAdjL True n a = Recion0AdjL (RecoinPowGr (n <=? 0) n a)
+
+type instance FRecionAdjL False n a = 
+	RecionNAdjL 
+		(FRecionAdjL 
+			((n - 1) <=? 0) 
+			(n - 1) 
+			a
+		)
+		(RecoinPowGr 
+			(n <=? 0) 
+			n 
+			a)
+{-}	(RecionNAdjL 
+		(RecoinPowGr 
+			(n <=? 0) 
+			n 
+			a)) :.:
+	(FRecionAdjL 
+			((n - 1) <=? 0) 
+			(n - 1) 
+			a
+		)
+-}
+{-}
+unCompFRecionAdjL :: 
+	FRecionAdjLT1 n a -> 
+	RecionNAdjL
+		(FRecionAdjL 
+			(n <=? 0) 
+			(n - 1) 
+			a
+		) 
+		(RecoinPowGr 
+			(n <=? 0) 
+			n 
+			a)
+-}
+type instance FRecionAdjR True n a = Recion0AdjR a
+
+type instance FRecionAdjR False n a = 
+	RecionNAdjR 
+		(FRecionAdjR 
+			((n - 1) <=? 0) 
+			(n - 1) 
+			a) 
+		(RecoinPowGr 
+			(n <=? 0) 
+			n 
+			a)
+{-}	(FRecionAdjR 
+		((n - 1) <=? 0) 
+		(n - 1) 
+		a) :.: 
+	(RecionNAdjR 
+		(RecoinPowGr 
+			(n <=? 0) 
+			n 
+			a))
+-}
+
+type RecoinPowGrT1 n a = 
+	(RecoinPowGr 
+		(n <=? 0) 
+		n 
+		a)
+
+type FRecionAdjRT1 n a = 
+	(FRecionAdjR 
+		(n <=? 0) 
+		n 
+		a)
+
+type FRecionAdjLT1 n a = 
+	(FRecionAdjL
+		(n <=? 0) 
+		n
+		a)
+{-}
+liftComp :: ((f :.: g) :.: t) -> (f :.: (g :.: t))
+liftComp 
+
+unliftComp :: (f :.: (g :.: t)) -> ((f :.: g) :.: t)
+-}
+liftRecion :: 
+	(	Monad m, KnownNat n,
+		Adjunction (FRecionAdjL (n <=? 0) n a) (FRecionAdjR (n <=? 0) n a), 
+		Adjunction (FRecionAdjL ((n + 1) <=? 0) (n + 1) a) (FRecionAdjR ((n + 1) <=? 0) (n + 1) a),
+		(FRecionAdjRT1 (n + 1) a) ~ 
+			RecionNAdjR 
+				(FRecionAdjR (n <=? 0) 
+					n
+					a) 
+				(RecoinPowGr 
+					((n + 1) <=? 0) 
+					(n + 1) 
+					a),
+		(FRecionAdjLT1 (n + 1) a) ~ 
+			RecionNAdjL 
+				(FRecionAdjL (n <=? 0) 
+					n 
+					a) 
+				(RecoinPowGr 
+					((n + 1) <=? 0) 
+					(n + 1) 
+					a)
+	) => 
+	Proxy a ->
+	SNat n ->
+	M.AdjointT 
+		(FRecionAdjLT1 n a) 
+		(FRecionAdjRT1 n a)
+		m b ->
+	M.AdjointT 
+		(FRecionAdjLT1 (n + 1) a) 
+		(FRecionAdjRT1 (n + 1) a)
+		m b
+liftRecion (pa :: Proxy a) (sn :: SNat n) (m :: M.AdjointT (FRecionAdjLT1 n a) (FRecionAdjRT1 n a) m b)
+	= do
+	(return () :: M.AdjointT 
+		(FRecionAdjLT1 (n + 1) a) 
+		(FRecionAdjRT1 (n + 1) a)
+		m ())
+	adjSnd $ 
+		adjSnd $ 
+		adjSnd {-@_ @_ 
+			@(	(Env IMapNNRC) :.: 
+				((Env (MapGr (RecoinPowGrT1 (n+1) a))) :.: 
+				(NNSccListAdjL (RecoinPowGrT1 (n+1) a))))
+			@(	((Reader IMapNNRC) :.: 
+				(Reader (MapGr (RecoinPowGrT1 (n+1) a)))) :.: 
+				(NNSccListAdjR (RecoinPowGrT1 (n+1) a)))-}
+			{-@(IMapNNRCAdjL (MapGrAdjL (NNSLPowAdjL (FRecionAdjLT1 n a) 
+				(RecoinPowGrT1 (n+1) a)) (RecoinPowGrT1 (n+1) a))) 
+			@(IMapNNRCAdjR (MapGrAdjR (NNSLPowAdjR (FRecionAdjRT1 n a) 
+				(RecoinPowGrT1 (n+1) a)) (RecoinPowGrT1 (n+1) a))) -}
+			m
+{-M.AdjointT @(FRecionAdjLT1 (n + 1) a) @(FRecionAdjRT1 (n + 1) a) $
+		tabulateAdjunction @(FRecionAdjLT1 (n + 1) a) @(FRecionAdjRT1 (n + 1) a) 
+			(\f-> (fmap . fmap) Comp1 $ (fmap . fmap . fmap) (\b-> fmap (const b) f) m)-}
+			--(\f-> (fmap . fmap) Comp1 $
+			--	(fmap . fmap . fmap) (\b-> fmap (const b) f) m
+			--	)
+
+{-}
+liftRecion :: 
+	(	Monad m, 
+		Adjunction (FRecionAdjL (n <=? 0) n a) (FRecionAdjR (n <=? 0) n a), 
+		Adjunction (FRecionAdjL ((n + 1) <=? 0) (n + 1) a) (FRecionAdjR ((n + 1) <=? 0) (n + 1) a),
+		(FRecionAdjRT1 (n + 1) a) ~ 
+			RecionNAdjR 
+				(FRecionAdjR (n <=? 0) 
+					(n - 1) 
+					a) 
+				(RecoinPowGr 
+					(n <=? 0) 
+					n 
+					a),
+		(FRecionAdjLT1 (n + 1) a) ~ 
+			RecionNAdjL 
+				(FRecionAdjL (n <=? 0) 
+					(n - 1) 
+					a) 
+				(RecoinPowGr 
+					(n <=? 0) 
+					n 
+					a)
+	) => 
+	M.AdjointT 
+		(FRecionAdjLT1 n a) 
+		(FRecionAdjRT1 n a)
+		m b ->
+	M.AdjointT 
+		(FRecionAdjLT1 (n + 1) a) 
+		(FRecionAdjRT1 (n + 1) a)
+		m b
+liftRecion 
+	((M.AdjointT m) ::
+		M.AdjointT 
+			(FRecionAdjLT1 n a
+			) 
+			(FRecionAdjRT1 n a)
+			m b) 
+	= (\(M.AdjointT (mn :: (FRecionAdjRT1 (n + 1) a) (m (FRecionAdjLT1 (n + 1) a ()))))
+		-> M.AdjointT $
+	(fmap . fmap) (Comp1 . fmap Comp1 . (fmap . fmap) Comp1) $
+	(Comp1 . Comp1 .  Comp1) $ -- (Comp1 . fmap Comp1 . (fmap . fmap) Comp1)
+	(fmap . fmap . fmap) 
+		(\(gmf :: GMFT (FRecionAdjR (n <=? 0) n a) m n a
+            )-> 
+			{-fmap (\(mx,my)->do
+				x <- mx
+				y <- my
+				return $ _a x y
+                ) $-}
+			_v $ gmf m -- (_c gmf)
+		) $ -- (fmap . fmap . fmap)
+	(unComp1 . unComp1 . unComp1) $ --((fmap . fmap) unComp1 . fmap unComp1 . unComp1)
+	(fmap . fmap) 
+		(	(fmap . fmap) unComp1 . 
+			fmap unComp1 .
+			(unComp1 :: FRecionAdjL ((n + 1) <=? 0) (n + 1) a () -> UnCompT1 (n + 1) a)
+		) $ mn
+--             (NNSccListAdjL (PowGr RPG))(Env (MapGr RPG))(Env IMapNNRC)
+	) (return @(M.AdjointT 
+		(FRecionAdjL 
+			((n + 1) <=? 0)
+			(n + 1)
+			a
+		) 
+		(FRecionAdjR 
+			((n + 1) <=? 0) 
+			(n + 1)
+			a)
+		m) ())
+
+type GMFT g0 m n a = g0
+    (m (EnvT IMapNNRC Identity
+            (Env
+                (MapGr
+                   (RecoinPowGr
+                       ((n + 1) <=? 0)
+                       (n + 1)
+                        a))
+                    (NNSccListAdjL
+                        (PowGr
+                            (RecoinPowGr
+                                ((n + 1) <=? 0)
+                                (n + 1)
+                                a))
+                        (FRecionAdjL
+                            (n <=? 0)
+                            n
+                            a
+                        	())))))
+
+type UnCompT1 n a =  (Env IMapNNRC)
+    ((Env
+    	(MapGr
+            (RecoinPowGr
+                (n <=? 0) n a))
+            :.: (NNSccListAdjL
+                (PowGr
+                    (RecoinPowGr
+                        (n <=? 0) n a))
+                    :.: FRecionAdjL
+                        ((n - 1) <=? 0) (n - 1) a))
+                  ())
+-}
+{-
+ (:.:)
+                  (Env IMapNNRC)
+                  (Env
+                     (MapGr
+                        (RecoinPowGr
+                           (Data.Type.Ord.OrdCond (CmpNat n1 0) True True False) n1 a3))
+                   :.: (NNSccListAdjL
+                          (PowGr
+                             (RecoinPowGr
+                                (Data.Type.Ord.OrdCond (CmpNat n1 0) True True False) n1 a3))
+                        :.: FRecionAdjL
+                              (Data.Type.Ord.OrdCond (CmpNat n1 0) True True False) (n1 - 1) a3))
+                  b
+-}
+
+{-}
+data AllRecionAdjFL f a = 
+		AllRecionNAdjL (RecionNAdjL f a)
+	|	AllRecion0AdjL (Recion0AdjL a)
+
+data AllRecionAdjFR g a = 
+		AllRecionNAdjR (RecionNAdjR g a)
+	|	AllRecion0AdjR (Recion0AdjR a)
+-}
+{-}
+data AllRecionAdjL a = 
+		AllRecionNAdjL (RecionNAdjL (AllRecionAdjL a) a)
+	|	AllRecion0AdjL (RecionNAdjL (Recion0AdjL a) a)
+
+data AllRecionAdjR a = 
+		AllRecionNAdjR (RecionNAdjR (AllRecionAdjR a) a)
+	|	AllRecion0AdjR (RecionNAdjR (Recion0AdjR a) a)
+-}
 
 data ConfNN = ConfNN 
 	{ confLRA :: (Double,Double)

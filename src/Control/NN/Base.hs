@@ -263,7 +263,7 @@ sysCalculate ::
 		(SysContainer sys (SysHash sys,[SysTrainData sys]))
 sysCalculate sys = proc ld -> do
 	cn <- sysGetCNetworkC sys -< ()
-	sysZipC sys $
+	sysZipC sys <<<
 		((sysMapC sys)
 			( proc n -> do
 				sysHashNetworkC sys -< n
