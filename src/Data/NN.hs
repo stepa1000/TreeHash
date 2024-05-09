@@ -1360,7 +1360,7 @@ type instance FRecionAdjL False n a =
 			a
 		)
 		(RecoinPowGr 
-			(n <=? 0) 
+			((n + 1) <=? 0) 
 			n 
 			a)
 
@@ -1373,13 +1373,13 @@ type instance FRecionAdjR False n a =
 			(n - 1) 
 			a) 
 		(RecoinPowGr 
-			(n <=? 0) 
+			((n + 1) <=? 0) 
 			n 
 			a)
 
 type RecoinPowGrT1 n a = 
 	(RecoinPowGr 
-		(n <=? 0) 
+		((n + 1) <=? 0) 
 		n 
 		a)
 
@@ -1405,7 +1405,7 @@ liftRecion ::
 					n
 					a) 
 				(RecoinPowGr 
-					((n + 1) <=? 0) 
+					((n + 1 + 1) <=? 0) 
 					(n + 1) 
 					a),
 		(FRecionAdjLT1 (n + 1) a) ~ 
@@ -1414,7 +1414,7 @@ liftRecion ::
 					n 
 					a) 
 				(RecoinPowGr 
-					((n + 1) <=? 0) 
+					(((n + 1) + 1) <=? 0) 
 					(n + 1) 
 					a)
 	) => 
@@ -1459,6 +1459,10 @@ instance (ClassNNSLPowAdj f g a, Adjunction f g) =>
 instance ClassNNSLPowAdj (Recion0AdjL a) (Recion0AdjR a) a where
 	liftNNSccListAdjGr = adjSnd . adjSnd . adjFst
 	liftNNSccListAdjA = adjSnd . adjSnd . adjSnd
+
+instance (ClassNNSLPowAdj f g a, Adjunction f g) => 
+	NNSccListAdj (RecionNAdjL f (PowGr a)) (RecionNAdjR g (PowGr a)) (PowGr a) where
+	liftNNSccListAdj = liftNNSccListAdjA -- ???
 
 type NAllResult n a = 
 	HashMap 
@@ -1553,7 +1557,7 @@ nextFunIURP :: (ListMInputGrT (n + 1) a ~
 				n
 				a) 
 			(RecoinPowGr 
-				((n + 1) <=? 0) 
+				(((n + 1) + 1) <=? 0) 
 				(n + 1) 
 				a),
 	(FRecionAdjLT1 (n + 1) a) ~ 
@@ -1562,12 +1566,20 @@ nextFunIURP :: (ListMInputGrT (n + 1) a ~
 				n 
 				a) 
 			(RecoinPowGr 
-				((n + 1) <=? 0) 
-					(n + 1) 
+				(((n + 1) + 1) <=? 0) 
+				(n + 1) 
 				a),
 	ListNRCT (n + 1) a ~ (NAllResult (n + 1) a, 
 		NConsequenceResult (n+1) a, 
-		ListNRC (n <=? 0) n a)
+		ListNRC (n <=? 0) n a), -- RecoinPowGr False n a = PowGr (RecoinPowGr (n <=? 0) (n - 1) a)
+	RecoinPowGrT1 ((n + 1) + 1) a ~ PowGr (RecoinPowGr (((n + 1) + 1) <=? 0) (n + 1) a),
+	RecoinPowGr (((n + 1) + 1) <=? 0) (n + 1) a ~ PowGr (RecoinPowGr ((n + 1) <=? 0) n a),
+	MonadIO m, Monad m, Hashable (RecoinPowGrT1 ((n + 1) + 1) a), Hashable (RecoinPowGrT1 n a),
+	ListDoubled (RecoinPowGrT1 n a), 
+	ClassNNSLPowAdj (FRecionAdjLT1 n a) (FRecionAdjRT1 n a) (RecoinPowGrT1 n a),
+	MonadLoger m, NNSccListAdj (FRecionAdjLT1 n a) (FRecionAdjRT1 n a) (RecoinPowGrT1 n a),
+	Traversable (FRecionAdjLT1 n a)
+	-- PowGr (PowGr (RecoinPowGr ((n + 1) <=? 0) (n + 1) a))
 	)
 	=>
 	FunIURP n m a -> 
@@ -1577,7 +1589,7 @@ nextFunIURP (f :: FunIURP n m a) iurp = do
 		(FRecionAdjLT1 (n + 1) a) 
 		(FRecionAdjRT1 (n + 1) a)
 		m ())
-	lnect <- liftRecion (proxyIURP iurp) (SNat @n) $ f (nextIURP iurp)
+	(lnect :: ListNRCT n a) <- liftRecion (proxyIURP iurp) (SNat @n) $ f (nextIURP iurp)
 	mxy <- mapM (\gra->updateAssumptionPre 
 		(alfaIURP iurp)
 		(errorIURP iurp)
@@ -1587,7 +1599,7 @@ nextFunIURP (f :: FunIURP n m a) iurp = do
 		(searchIntIURP iurp)
 		(upgradingIntIURP iurp)
 		(sarIURP iurp)) (fst $ (listLMIGT iurp :: ListMInputGrT (n + 1) a)) 
-	return $ maybe (Map.empty, Map.empty) (\(x,y)->(x,y)) mxy
+	return @_ @(ListNRCT (n + 1) a) $ maybe (Map.empty, Map.empty, lnect) (\(x,y)->(x,y,lnect)) mxy
 
 data InputUpdateRecoinPre n a = InputUpdateRecoinPre
 	{
