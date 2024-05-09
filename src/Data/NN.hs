@@ -18,7 +18,7 @@
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE GADTs #-}
---{-# LANGUAGE IncoherentInstances #-}
+{-# LANGUAGE IncoherentInstances #-}
 
 module Data.NN where
 
@@ -60,7 +60,7 @@ import Control.Monad.IO.Class
 import Control.Concurrent.MVar
 import Control.Concurrent
 import Control.Seq
-import Control.Monad.Trans.Free.Church
+import Control.Monad.Trans.Free -- Control.Monad.Trans.Free.Church
 import GHC.Generics
 import GHC.TypeNats
 import AI.BPANN
@@ -1280,8 +1280,8 @@ updateAssumptionPost p pe pa snn r si ui sar pr = do
 	restorationPowUp p pe pa sar snn r si ui 
 	lift $ logInfoM "End: updateAssumptionPost"
 
-type Recion0AdjL a = Recion0AdjL
-	(IMapNNRCAdjL 
+type Recion0AdjL a =
+	IMapNNRCAdjL 
 		(MapGrAdjL 
 			( NNSLPowAdjL 
 				( NNSccListAdjL a
@@ -1290,7 +1290,7 @@ type Recion0AdjL a = Recion0AdjL
 			) 
 			a)
 
-type Recion0AdjR a = Recion0AdjR
+type Recion0AdjR a =
 	IMapNNRCAdjR
 		(MapGrAdjR
 			( NNSLPowAdjR 
@@ -1435,7 +1435,7 @@ liftRecion (pa :: Proxy a) (sn :: SNat n) (m :: M.AdjointT (FRecionAdjLT1 n a) (
 		(FRecionAdjRT1 (n + 1) a)
 		m ())
 	adjSnd $ adjSnd $ adjSnd m 
-{-}
+
 -- instance ClassIMapNNRAdj (FRecionAdjL b n a) (FRecionAdjR b n a) where
 instance Adjunction f g => ClassIMapNNRAdj (RecionNAdjL f a) (RecionNAdjR g a) where
 	liftIMapNNRAdj = adjFst
@@ -1443,7 +1443,7 @@ instance Adjunction f g => ClassIMapNNRAdj (RecionNAdjL f a) (RecionNAdjR g a) w
 		M.AdjointT (Env IMapNNRC) (Reader IMapNNRC) m b ->
 		M.AdjointT f g m b-}
 instance ClassIMapNNRAdj (Recion0AdjL a) (Recion0AdjR a) where
-	liftIMapNNRAdj = adjFst m
+	liftIMapNNRAdj = adjFst
 
 instance Adjunction f g => ClassMapGrAdj (RecionNAdjL f a) (RecionNAdjR g a) a where
 	liftMapGrAdj = adjSnd . adjFst
@@ -1459,7 +1459,7 @@ instance (ClassNNSLPowAdj f g a, Adjunction f g) =>
 instance ClassNNSLPowAdj (Recion0AdjL a) (Recion0AdjR a) a where
 	liftNNSccListAdjGr = adjSnd . adjSnd . adjFst
 	liftNNSccListAdjA = adjSnd . adjSnd . adjSnd
--}
+
 type NAllResult n a = 
 	HashMap 
 		(RecoinPowGrT1 n a) 
@@ -1494,15 +1494,31 @@ type instance ListMInputGr True n a = (RecoinPowGrT1 n a)
 type instance ListMInputGr False n a = (Maybe (RecoinPowGrT1 n a), ListMInputGr ((n - 1) <=? 0) (n - 1) a)
 
 type ListMInputGrT n a = ListMInputGr (n <=? 0) n a
-
-type family FunUpdateRecoinPre (b :: Bool) (n :: Nat) a -- :: FInputUpdateRecoinPre n a (ListNRCT n a)
+{-}
+type family FunUpdateRecoinPre (b :: Bool) (n :: Nat) m a where
+	FunUpdateRecoinPre False 0 m a = InputUpdateRecoinPre 0 a -> 
+		M.AdjointT 
+			(FRecionAdjLT1 0 a) 
+			(FRecionAdjRT1 0 a)
+			m (ListNRCT 0 a)
+	FunUpdateRecoinPre True n m a =
+		InputUpdateRecoinPre n a -> 
+			M.AdjointT 
+			(FRecionAdjLT1 n a) 
+			(FRecionAdjRT1 n a)
+			m (ListNRCT n a)
+-}
+{-}	InputUpdateRecoinPre n a -> 
+	(ListNRCT n a -> c) -> 
+	FInputUpdateRecoinPre n a c
+-}
 {-}	InputUpdateRecoinPre n a -> 
 	M.AdjointT 
 		(FRecionAdjLT1 n a) 
 		(FRecionAdjRT1 n a)
 		m (ListNRCT n a)
 -}
-type instance FunUpdateRecoinPre True 0 a = FInputUpdateRecoinPre 0 a (ListNRCT 0 a)
+-- type instance FunUpdateRecoinPre True 0 a = FunFIURPN0 -- FInputUpdateRecoinPre 0 a (ListNRCT 0 a)
 {-\ iurp -> updateRecoinPre'2
 	pa (SNat @0) 
 	(alfaIURP iurp) 
@@ -1514,11 +1530,64 @@ type instance FunUpdateRecoinPre True 0 a = FInputUpdateRecoinPre 0 a (ListNRCT 
 	(upgradingIntIURP iurp) 
 	(sarIURP iurp)
 -}
-type instance FunUpdateRecoinPre False n a = FInputUpdateRecoinPre n a (ListNRCT n a)
+--type instance FunUpdateRecoinPre False n a = FunFIURPN
 {-\ iurp -> do
 	liftRecion $ (FunUpdateRecoinPre ((n - 1) <=? 0) (n - 1) a)
 	updateRecoinPre'1
 -}
+
+type FunIURP n m a = InputUpdateRecoinPre n a -> 
+			M.AdjointT 
+			(FRecionAdjLT1 n a) 
+			(FRecionAdjRT1 n a)
+			m (ListNRCT n a)
+
+nextFunIURP :: (ListMInputGrT (n + 1) a ~ 
+	(Maybe (RecoinPowGrT1 (n + 1) a), ListMInputGr (n <=? 0) n a),
+	KnownNat n,
+	Adjunction (FRecionAdjL (n <=? 0) n a) (FRecionAdjR (n <=? 0) n a), 
+	Adjunction (FRecionAdjL ((n + 1) <=? 0) (n + 1) a) (FRecionAdjR ((n + 1) <=? 0) (n + 1) a),
+	(FRecionAdjRT1 (n + 1) a) ~ 
+		RecionNAdjR 
+			(FRecionAdjR (n <=? 0) 
+				n
+				a) 
+			(RecoinPowGr 
+				((n + 1) <=? 0) 
+				(n + 1) 
+				a),
+	(FRecionAdjLT1 (n + 1) a) ~ 
+		RecionNAdjL 
+			(FRecionAdjL (n <=? 0) 
+				n 
+				a) 
+			(RecoinPowGr 
+				((n + 1) <=? 0) 
+					(n + 1) 
+				a),
+	ListNRCT (n + 1) a ~ (NAllResult (n + 1) a, 
+		NConsequenceResult (n+1) a, 
+		ListNRC (n <=? 0) n a)
+	)
+	=>
+	FunIURP n m a -> 
+	FunIURP (n + 1) m a
+nextFunIURP (f :: FunIURP n m a) iurp = do
+	(return () :: M.AdjointT 
+		(FRecionAdjLT1 (n + 1) a) 
+		(FRecionAdjRT1 (n + 1) a)
+		m ())
+	lnect <- liftRecion (proxyIURP iurp) (SNat @n) $ f (nextIURP iurp)
+	mxy <- mapM (\gra->updateAssumptionPre 
+		(alfaIURP iurp)
+		(errorIURP iurp)
+		gra
+		(sizeNN iurp)
+		(replicateIURP iurp)
+		(searchIntIURP iurp)
+		(upgradingIntIURP iurp)
+		(sarIURP iurp)) (fst $ (listLMIGT iurp :: ListMInputGrT (n + 1) a)) 
+	return $ maybe (Map.empty, Map.empty) (\(x,y)->(x,y)) mxy
 
 data InputUpdateRecoinPre n a = InputUpdateRecoinPre
 	{
@@ -1533,34 +1602,40 @@ data InputUpdateRecoinPre n a = InputUpdateRecoinPre
 	upgradingIntIURP :: UpgradingInt,
 	sarIURP :: SizeAssumptionRestoration}
 
-nextIURP :: InputUpdateRecoinPre (n + 1) a -> InputUpdateRecoinPre n a
+nextIURP :: (ListMInputGrT (n + 1) a ~ 
+	(Maybe (RecoinPowGrT1 (n + 1) a), ListMInputGr (n <=? 0) n a),
+	KnownNat n)
+	=> InputUpdateRecoinPre (n + 1) a -> InputUpdateRecoinPre n a
 nextIURP (iurp :: InputUpdateRecoinPre (n + 1) a) = InputUpdateRecoinPre
 	(proxyIURP iurp)
 	(SNat @n)
 	(alfaIURP iurp)
 	(errorIURP iurp)
-	((\(_,_,x)->x) $ listLMIGT iurp)
+	((\(_,x)->x) $ (listLMIGT iurp :: ListMInputGrT (n + 1) a))
 	(sizeNN iurp)
 	(replicateIURP iurp)
 	(searchIntIURP iurp)
 	(upgradingIntIURP iurp)
 	(sarIURP iurp)
 
-
 data FInputUpdateRecoinPre (n :: Nat) a b where
 	LiftFIURP :: FInputUpdateRecoinPre n a b -> FInputUpdateRecoinPre (n + 1) a b
 	FunFIURPN0 :: InputUpdateRecoinPre 0 a -> (ListNRCT 0 a -> b) -> FInputUpdateRecoinPre 0 a b
-	FunFIURPN :: 
-		InputUpdateRecoinPre (n + 1) a -> 
-		((NAllResult (n + 1) a, NConsequenceResult (n + 1) a) -> b) -> 
-		FInputUpdateRecoinPre (n + 1) a b
-
+	HeadListMInputGrT :: 
+		ListMInputGrT (n + 1) a -> 
+		((Maybe (RecoinPowGrT1 n a), ListMInputGr (n <=? 0) n a) -> b) ->
+		FInputUpdateRecoinPre n a b
+	{-FunFIURPN :: 
+		InputUpdateRecoinPre n a -> 
+		(ListNRCT n a -> b) -> 
+		FInputUpdateRecoinPre n a b-}
+{-}
 instance Functor (FInputUpdateRecoinPre n a) where
 	fmap f (LiftFIURP g) = LiftFIURP $ fmap f g
 	fmap f (FunFIURPN0 i g) = FunFIURPN0 i $ (f . g)
-	fmap f (FunFIURPN i g) = FunFIURPN i $ (f . g)
-
-type FreeIURP n a = F (FInputUpdateRecoinPre n a)
+	--fmap f (FunFIURPN i g) = FunFIURPN i $ (f . g)
+-}
+-- type FreeIURP n a = Free (FInputUpdateRecoinPre n a)
 {-}
 runFIURP ::	
 	(	Monad m, KnownNat n, Typeable n
@@ -1608,7 +1683,7 @@ runFIURP (pa :: Proxy a) (sn :: SNat n) = hoistMAdj (\(Identity x)->return x) $ 
 				(upgradingIntIURP iurp) 
 				(sarIURP iurp) -}
 -}
-
+{-}
 updateRecoinPre'1 :: 
 	(	Monad m, KnownNat n, Typeable n{-,  (n <=? 0) ~ False,
 		Adjunction (FRecionAdjL (n <=? 0) n a) (FRecionAdjR (n <=? 0) n a),
@@ -1648,13 +1723,14 @@ updateRecoinPre'1 (pa :: Proxy a) (sn :: SNat n) p pe ((mgra,l) :: ListMInputGrT
 			)-}
 		mxy <- mapM (\gra->updateAssumptionPre p pe gra snn r si ui sar) mgra 
 		return $ maybe (Map.empty, Map.empty) (\(x,y)->(x,y)) mxy
-
+-}
 updateRecoinPre'2 ::
 	(	Monad m, KnownNat 0, Typeable 0, MonadIO m, Hashable a,
 		Adjunction (FRecionAdjL (0 <=? 0) 0 a) (FRecionAdjR (0 <=? 0) 0 a),
 		NAllResult 0 a ~ AllResult a, NConsequenceResult 0 a ~ ConsequenceResult a,
 		ListNRCT 0 a ~ (NAllResult 0 a, NConsequenceResult 0 a),
-		ListMInputGrT 0 a ~ a, Typeable a, ListDoubled a
+		ListMInputGrT 0 a ~ a, Typeable a, ListDoubled a, MonadLoger m,
+		NNSccListAdj (Recion0AdjL a) (Recion0AdjR a) a
 	) =>
 	Proxy a ->
 	SNat 0 ->
