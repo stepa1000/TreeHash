@@ -905,14 +905,14 @@ instance ListDoubled a => ListDoubled (PowGr a) where
 	fromLD _ gr = gr
 
 class ClassNNSLPowAdj f g a where
-	liftNNSccListAdjGr :: (Monad m, Hashable a, Eq a) =>
+	liftNNSccListAdjGr :: (Monad m) =>
 		M.AdjointT 
 			(NNSccListAdjL (PowGr a))
 			(NNSccListAdjR (PowGr a))
 			m 
 			b ->
 		M.AdjointT f g m b
-	liftNNSccListAdjA :: (Monad m, Hashable a, Eq a) =>
+	liftNNSccListAdjA :: (Monad m) =>
 		M.AdjointT 
 			(NNSccListAdjL a) 
 			(NNSccListAdjR a)
@@ -1290,8 +1290,6 @@ type Recion0AdjR a =
 			) 
 			a)
 
--- NNSLPowAdjL f a = (NNSccListAdjL (PowGr a)) :.: f
-
 type RecionNAdjL f a = 
 	IMapNNRCAdjL 
 		(MapGrAdjL 
@@ -1300,14 +1298,7 @@ type RecionNAdjL f a =
 				a -- n + 1 :: PowGr a
 			) 
 			a) -- n + 1 :: PowGr a
-{-}
-type UnRecionNAdjL f a b = 
-	(Env IMapNNRC) 
-		( (Env (MapGr a))
-			( (NNSccListAdjL (PowGr a)) (f b)
-			)
-		)
--}
+
 type RecionNAdjR g a = 
 	IMapNNRCAdjR
 		(MapGrAdjR
@@ -1340,31 +1331,7 @@ type instance FRecionAdjL False n a =
 			(n <=? 0) 
 			n 
 			a)
-{-}	(RecionNAdjL 
-		(RecoinPowGr 
-			(n <=? 0) 
-			n 
-			a)) :.:
-	(FRecionAdjL 
-			((n - 1) <=? 0) 
-			(n - 1) 
-			a
-		)
--}
-{-}
-unCompFRecionAdjL :: 
-	FRecionAdjLT1 n a -> 
-	RecionNAdjL
-		(FRecionAdjL 
-			(n <=? 0) 
-			(n - 1) 
-			a
-		) 
-		(RecoinPowGr 
-			(n <=? 0) 
-			n 
-			a)
--}
+
 type instance FRecionAdjR True n a = Recion0AdjR a
 
 type instance FRecionAdjR False n a = 
@@ -1377,16 +1344,6 @@ type instance FRecionAdjR False n a =
 			(n <=? 0) 
 			n 
 			a)
-{-}	(FRecionAdjR 
-		((n - 1) <=? 0) 
-		(n - 1) 
-		a) :.: 
-	(RecionNAdjR 
-		(RecoinPowGr 
-			(n <=? 0) 
-			n 
-			a))
--}
 
 type RecoinPowGrT1 n a = 
 	(RecoinPowGr 
@@ -1405,12 +1362,7 @@ type FRecionAdjLT1 n a =
 		(n <=? 0) 
 		n
 		a)
-{-}
-liftComp :: ((f :.: g) :.: t) -> (f :.: (g :.: t))
-liftComp 
 
-unliftComp :: (f :.: (g :.: t)) -> ((f :.: g) :.: t)
--}
 liftRecion :: 
 	(	Monad m, KnownNat n,
 		Adjunction (FRecionAdjL (n <=? 0) n a) (FRecionAdjR (n <=? 0) n a), 
@@ -1450,166 +1402,31 @@ liftRecion (pa :: Proxy a) (sn :: SNat n) (m :: M.AdjointT (FRecionAdjLT1 n a) (
 		(FRecionAdjLT1 (n + 1) a) 
 		(FRecionAdjRT1 (n + 1) a)
 		m ())
-	adjSnd $ 
-		adjSnd $ 
-		adjSnd {-@_ @_ 
-			@(	(Env IMapNNRC) :.: 
-				((Env (MapGr (RecoinPowGrT1 (n+1) a))) :.: 
-				(NNSccListAdjL (RecoinPowGrT1 (n+1) a))))
-			@(	((Reader IMapNNRC) :.: 
-				(Reader (MapGr (RecoinPowGrT1 (n+1) a)))) :.: 
-				(NNSccListAdjR (RecoinPowGrT1 (n+1) a)))-}
-			{-@(IMapNNRCAdjL (MapGrAdjL (NNSLPowAdjL (FRecionAdjLT1 n a) 
-				(RecoinPowGrT1 (n+1) a)) (RecoinPowGrT1 (n+1) a))) 
-			@(IMapNNRCAdjR (MapGrAdjR (NNSLPowAdjR (FRecionAdjRT1 n a) 
-				(RecoinPowGrT1 (n+1) a)) (RecoinPowGrT1 (n+1) a))) -}
-			m
-{-M.AdjointT @(FRecionAdjLT1 (n + 1) a) @(FRecionAdjRT1 (n + 1) a) $
-		tabulateAdjunction @(FRecionAdjLT1 (n + 1) a) @(FRecionAdjRT1 (n + 1) a) 
-			(\f-> (fmap . fmap) Comp1 $ (fmap . fmap . fmap) (\b-> fmap (const b) f) m)-}
-			--(\f-> (fmap . fmap) Comp1 $
-			--	(fmap . fmap . fmap) (\b-> fmap (const b) f) m
-			--	)
+	adjSnd $ adjSnd $ adjSnd m 
 
-{-}
-liftRecion :: 
-	(	Monad m, 
-		Adjunction (FRecionAdjL (n <=? 0) n a) (FRecionAdjR (n <=? 0) n a), 
-		Adjunction (FRecionAdjL ((n + 1) <=? 0) (n + 1) a) (FRecionAdjR ((n + 1) <=? 0) (n + 1) a),
-		(FRecionAdjRT1 (n + 1) a) ~ 
-			RecionNAdjR 
-				(FRecionAdjR (n <=? 0) 
-					(n - 1) 
-					a) 
-				(RecoinPowGr 
-					(n <=? 0) 
-					n 
-					a),
-		(FRecionAdjLT1 (n + 1) a) ~ 
-			RecionNAdjL 
-				(FRecionAdjL (n <=? 0) 
-					(n - 1) 
-					a) 
-				(RecoinPowGr 
-					(n <=? 0) 
-					n 
-					a)
-	) => 
-	M.AdjointT 
-		(FRecionAdjLT1 n a) 
-		(FRecionAdjRT1 n a)
-		m b ->
-	M.AdjointT 
-		(FRecionAdjLT1 (n + 1) a) 
-		(FRecionAdjRT1 (n + 1) a)
-		m b
-liftRecion 
-	((M.AdjointT m) ::
-		M.AdjointT 
-			(FRecionAdjLT1 n a
-			) 
-			(FRecionAdjRT1 n a)
-			m b) 
-	= (\(M.AdjointT (mn :: (FRecionAdjRT1 (n + 1) a) (m (FRecionAdjLT1 (n + 1) a ()))))
-		-> M.AdjointT $
-	(fmap . fmap) (Comp1 . fmap Comp1 . (fmap . fmap) Comp1) $
-	(Comp1 . Comp1 .  Comp1) $ -- (Comp1 . fmap Comp1 . (fmap . fmap) Comp1)
-	(fmap . fmap . fmap) 
-		(\(gmf :: GMFT (FRecionAdjR (n <=? 0) n a) m n a
-            )-> 
-			{-fmap (\(mx,my)->do
-				x <- mx
-				y <- my
-				return $ _a x y
-                ) $-}
-			_v $ gmf m -- (_c gmf)
-		) $ -- (fmap . fmap . fmap)
-	(unComp1 . unComp1 . unComp1) $ --((fmap . fmap) unComp1 . fmap unComp1 . unComp1)
-	(fmap . fmap) 
-		(	(fmap . fmap) unComp1 . 
-			fmap unComp1 .
-			(unComp1 :: FRecionAdjL ((n + 1) <=? 0) (n + 1) a () -> UnCompT1 (n + 1) a)
-		) $ mn
---             (NNSccListAdjL (PowGr RPG))(Env (MapGr RPG))(Env IMapNNRC)
-	) (return @(M.AdjointT 
-		(FRecionAdjL 
-			((n + 1) <=? 0)
-			(n + 1)
-			a
-		) 
-		(FRecionAdjR 
-			((n + 1) <=? 0) 
-			(n + 1)
-			a)
-		m) ())
+-- instance ClassIMapNNRAdj (FRecionAdjL b n a) (FRecionAdjR b n a) where
+instance Adjunction f g => ClassIMapNNRAdj (RecionNAdjL f a) (RecionNAdjR g a) where
+	liftIMapNNRAdj = adjFst
+		{-:: (Monad m) =>
+		M.AdjointT (Env IMapNNRC) (Reader IMapNNRC) m b ->
+		M.AdjointT f g m b-}
+instance ClassIMapNNRAdj (Recion0AdjL a) (Recion0AdjR a) where
+	liftIMapNNRAdj = adjFst
 
-type GMFT g0 m n a = g0
-    (m (EnvT IMapNNRC Identity
-            (Env
-                (MapGr
-                   (RecoinPowGr
-                       ((n + 1) <=? 0)
-                       (n + 1)
-                        a))
-                    (NNSccListAdjL
-                        (PowGr
-                            (RecoinPowGr
-                                ((n + 1) <=? 0)
-                                (n + 1)
-                                a))
-                        (FRecionAdjL
-                            (n <=? 0)
-                            n
-                            a
-                        	())))))
+instance Adjunction f g => ClassMapGrAdj (RecionNAdjL f a) (RecionNAdjR g a) a where
+	liftMapGrAdj = adjSnd . adjFst
 
-type UnCompT1 n a =  (Env IMapNNRC)
-    ((Env
-    	(MapGr
-            (RecoinPowGr
-                (n <=? 0) n a))
-            :.: (NNSccListAdjL
-                (PowGr
-                    (RecoinPowGr
-                        (n <=? 0) n a))
-                    :.: FRecionAdjL
-                        ((n - 1) <=? 0) (n - 1) a))
-                  ())
--}
-{-
- (:.:)
-                  (Env IMapNNRC)
-                  (Env
-                     (MapGr
-                        (RecoinPowGr
-                           (Data.Type.Ord.OrdCond (CmpNat n1 0) True True False) n1 a3))
-                   :.: (NNSccListAdjL
-                          (PowGr
-                             (RecoinPowGr
-                                (Data.Type.Ord.OrdCond (CmpNat n1 0) True True False) n1 a3))
-                        :.: FRecionAdjL
-                              (Data.Type.Ord.OrdCond (CmpNat n1 0) True True False) (n1 - 1) a3))
-                  b
--}
+instance ClassMapGrAdj (Recion0AdjL a) (Recion0AdjR a) a where
+	liftMapGrAdj = adjSnd . adjFst
 
-{-}
-data AllRecionAdjFL f a = 
-		AllRecionNAdjL (RecionNAdjL f a)
-	|	AllRecion0AdjL (Recion0AdjL a)
+instance (ClassNNSLPowAdj f g a, Adjunction f g) => 
+	ClassNNSLPowAdj (RecionNAdjL f (PowGr a)) (RecionNAdjR g (PowGr a)) (PowGr a) where
+	liftNNSccListAdjGr = adjSnd . adjSnd . adjFst
+	liftNNSccListAdjA = adjSnd . adjSnd . adjSnd . liftNNSccListAdjGr
 
-data AllRecionAdjFR g a = 
-		AllRecionNAdjR (RecionNAdjR g a)
-	|	AllRecion0AdjR (Recion0AdjR a)
--}
-{-}
-data AllRecionAdjL a = 
-		AllRecionNAdjL (RecionNAdjL (AllRecionAdjL a) a)
-	|	AllRecion0AdjL (RecionNAdjL (Recion0AdjL a) a)
-
-data AllRecionAdjR a = 
-		AllRecionNAdjR (RecionNAdjR (AllRecionAdjR a) a)
-	|	AllRecion0AdjR (RecionNAdjR (Recion0AdjR a) a)
--}
+instance ClassNNSLPowAdj (Recion0AdjL a) (Recion0AdjR a) a where
+	liftNNSccListAdjGr = adjSnd . adjSnd . adjFst
+	liftNNSccListAdjA = adjSnd . adjSnd . adjSnd
 
 data ConfNN = ConfNN 
 	{ confLRA :: (Double,Double)
