@@ -14,6 +14,9 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Data.NN where
 
@@ -29,6 +32,7 @@ import Data.Map as OMap
 import Data.Tree as Tree
 import Data.IntMap as IMap
 import Data.Maybe
+import Data.Either
 import Data.Graph.Inductive.PatriciaTree as G
 import Data.Graph.Inductive.Graph as G
 -- import Data.Graph.Inductive.Monad.IOArray as G
@@ -38,7 +42,9 @@ import Data.Word
 import Data.Aeson as Aeson
 import Data.Time.Clock
 import Data.Semigroup
-import Data.Proxy
+import Data.Proxy as P
+import Data.Typeable as T
+import Data.Type.Equality as T
 import Debug.Trace
 import Control.Monad.Trans.Adjoint as M
 import Data.Functor.Adjunction
@@ -1427,6 +1433,104 @@ instance (ClassNNSLPowAdj f g a, Adjunction f g) =>
 instance ClassNNSLPowAdj (Recion0AdjL a) (Recion0AdjR a) a where
 	liftNNSccListAdjGr = adjSnd . adjSnd . adjFst
 	liftNNSccListAdjA = adjSnd . adjSnd . adjSnd
+
+type NAllResult n a = 
+	HashMap 
+		(RecoinPowGrT1 n a) 
+		(	[(RecoinPowGrT1 (n + 1) a,
+			RecoinPowGrT1 (n + 1) a, 
+			HashNNGr,[[[PackedNeuron]]])
+		])
+
+type NConsequenceResult n a = 
+	HashMap 
+		(RecoinPowGrT1 n a) 
+		(	[(RecoinPowGrT1 (n + 1) a,
+			RecoinPowGrT1 (n + 1) a, 
+			HashNNGr,[[[PackedNeuron]]])
+		])
+
+type family ListNRC (b :: Bool) (n :: Nat) a
+
+type instance ListNRC True n a = (NAllResult n a, NConsequenceResult n a)
+
+type instance ListNRC False n a = 
+	(	NAllResult n a, 
+		NConsequenceResult n a, 
+		ListNRC ((n - 1) <=? 0) (n - 1) a)
+
+type ListNRCT n a = ListNRC (n <=? 0) n a
+
+type family ListMInputGr (b :: Bool) (n :: Nat) a
+
+type instance ListMInputGr True n a = (RecoinPowGrT1 n a)
+
+type instance ListMInputGr False n a = (Maybe (RecoinPowGrT1 n a), ListMInputGr ((n - 1) <=? 0) (n - 1) a)
+
+type ListMInputGrT n a = ListMInputGr (n <=? 0) n a
+
+updateRecoinPre :: 
+	(	Monad m, KnownNat n, Typeable n,
+		Adjunction (FRecionAdjL (n <=? 0) n a) (FRecionAdjR (n <=? 0) n a),
+		NAllResult 0 a ~ AllResult a, NConsequenceResult 0 a ~ ConsequenceResult a,
+		ListNRCT 0 a ~ (NAllResult 0 a, NConsequenceResult 0 a),
+		ListMInputGrT 0 a ~ a
+	) =>
+	Proxy a ->
+	SNat n ->
+	(Double,Double) ->
+	(Double,Double) ->
+	ListMInputGrT n a ->
+	SizeNN ->
+	Replicate ->
+	SerchInt ->
+	UpgradingInt ->
+	SizeAssumptionRestoration -> 
+	M.AdjointT 
+		(FRecionAdjLT1 n a) 
+		(FRecionAdjRT1 n a)
+		m 
+		(ListNRCT n a)
+updateRecoinPre (pa :: Proxy a) (sn :: SNat n) p pe (mgra,l) snn r si ui sar
+	| fromSNat sn > 0 = do
+		(return () :: M.AdjointT 
+			(FRecionAdjLT1 n a) 
+			(FRecionAdjRT1 n a)
+			m ())
+		lnrct <- liftRecion pa (SNat @(n - 1)) $ 
+			updateRecoinPre pa (SNat @(n - 1)) p pe l snn r si ui sar
+		mxy <- mapM (\gra->updateAssumptionPre p pe gra snn r si ui sar) mgra 
+		return $ maybe (Map.empty, Map.empty, lnrct) (\(x,y)->(x,y,lnrct)) mxy
+updateRecoinPre (pa :: Proxy a) (sn :: SNat 0) p pe (a :: ListMInputGrT 0 a) snn r si ui sar
+	| 	fromSNat sn == 0 && 
+		(isJust $ eqT @(SNat n) @(SNat 0)) &&
+		(isJust $ eqT @(ListMInputGrT n a) @(ListMInputGrT 0 a)) &&
+		(isLeft $ decT @a @(Maybe _,ListMInputGrT (n-1) a))
+		= do
+		(return () :: 
+			(	M.AdjointT (FRecionAdjLT1 n a) (FRecionAdjRT1 n a) m () ~
+				M.AdjointT (FRecionAdjLT1 0 a) (FRecionAdjRT1 0 a) m ()
+				) 
+			=> M.AdjointT 
+				(FRecionAdjLT1 0 a) 
+				(FRecionAdjRT1 0 a)
+				m ())
+		let n0 = fromJust $ eqT @(SNat n) @(SNat 0)
+		(r :: (AllResult a, ConsequenceResult a)) <- 
+			updateAssumptionPre p pe a snn r si ui sar
+		return @_ @(ListNRCT 0 a) r
+{-}			((gcastWith @_ @(SNat n) @(SNat 0) @(AllResult a, ConsequenceResult a) :: 
+				((SNat n) :~: (SNat 0)) -> ((SNat n) ~ (SNat 0) => (AllResult a, ConsequenceResult a))) 
+				n0 
+				r )-}
+
+type ReturnTLR n a = (	n ~ 0,
+				a ~ ListMInputGrT 0 a,
+				ListNRCT 0 a ~
+				(NAllResult 0 a, NConsequenceResult 0 a),
+				(NAllResult 0 a, NConsequenceResult 0 a) ~ 
+				(AllResult a, ConsequenceResult a) 
+				)
 
 data ConfNN = ConfNN 
 	{ confLRA :: (Double,Double)
