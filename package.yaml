@@ -36,6 +36,8 @@ dependencies:
 - bpann-my
 - time
 - parallel
+- either
+- free 
 
 ghc-options:
 - -Wall

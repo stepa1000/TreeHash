@@ -51,8 +51,10 @@ library
     , bytestring
     , comonad
     , containers
+    , either
     , fgl
     , fgl-visualize
+    , free
     , hashable
     , mtl
     , parallel
@@ -80,8 +82,10 @@ executable TreeHash-exe
     , bytestring
     , comonad
     , containers
+    , either
     , fgl
     , fgl-visualize
+    , free
     , hashable
     , mtl
     , parallel
@@ -110,8 +114,10 @@ test-suite TreeHash-test
     , bytestring
     , comonad
     , containers
+    , either
     , fgl
     , fgl-visualize
+    , free
     , hashable
     , mtl
     , parallel
