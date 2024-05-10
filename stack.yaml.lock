@@ -38,15 +38,15 @@ packages:
     commit: d47c29187e5f0c616b992f296e83d0f3253832d3
     git: https://github.com/stepa1000/free-profunctor.git
 - completed:
-    commit: bd8fd81139d4689478928f09284760498d082361
+    commit: a61830a7da61cf95acabcf43a1f019bbdfccc984
     git: https://github.com/stepa1000/bpann-my.git
     name: bpann-my
     pantry-tree:
-      sha256: b89841c5403ddaa4c05ad00e8ea58adbe8763e4ae2a03df4481e410446a4c969
-      size: 718
+      sha256: 6875c81b9d2d16c8f3fbd769a21d645adc947a756f99a3fe9582ae07ec540c47
+      size: 780
     version: 0.1.0.0
   original:
-    commit: bd8fd81139d4689478928f09284760498d082361
+    commit: a61830a7da61cf95acabcf43a1f019bbdfccc984
     git: https://github.com/stepa1000/bpann-my.git
 - completed:
     commit: 6ae87703d11ab4aac8ff47d6acf347fe3cc055da

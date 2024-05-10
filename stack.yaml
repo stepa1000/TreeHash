@@ -49,7 +49,7 @@ extra-deps:
 - git: https://github.com/stepa1000/free-profunctor.git
   commit: d47c29187e5f0c616b992f296e83d0f3253832d3
 - git: https://github.com/stepa1000/bpann-my.git
-  commit: bd8fd81139d4689478928f09284760498d082361
+  commit: a61830a7da61cf95acabcf43a1f019bbdfccc984
 - git: https://github.com/stepa1000/fgl.git
   commit: 6ae87703d11ab4aac8ff47d6acf347fe3cc055da
 - zlib-clib-1.3.1

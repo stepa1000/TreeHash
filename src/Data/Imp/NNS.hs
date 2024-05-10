@@ -196,8 +196,8 @@ runLTNN snn = do
 	mvs <- newEmptyMVar 
 	forkIO $ runAdjunctorNN $ 
 		startlTNN mvs snn
-	forkIO $ runAdjunctorNN $ 
-		startlTNN mvs snn
+	{-forkIO $ runAdjunctorNN $ 
+		startlTNN mvs snn-}
 	str <- P.getLine
 	f mvs str
 	where

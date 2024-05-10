@@ -64,6 +64,7 @@ import Control.Monad.Trans.Free -- Control.Monad.Trans.Free.Church
 import GHC.Generics
 import GHC.TypeNats
 import AI.BPANN
+import AI.BPANN.Async
 import Data.Monoid
 import Control.Base.Comonad
 import Control.Core.Biparam
@@ -153,7 +154,7 @@ creatRandomNetworksAdj j = do
 	l <- adjSnd $ adjGetEnv
 	mapM (\x->do
 		i <- liftIO $ randomIO
-		return $ createRandomNetwork i l
+		liftIO $ createRandomNetworkIO i l
 		) [0..j]
 
 creatRandomNetworksAdj_ :: (Monad m, MonadIO m, MonadLoger m) => 
@@ -193,7 +194,7 @@ trainAdj p pe ldd = do
 	e <- liftIO $ randomRIO pe
 	lnold <- adjFst $ adjGetEnv
 	--lift $ logDebugM $ "Length list NN:" .< (P.length lnold)
-	let ln = catMaybes $ P.map (\n-> train 100000 i e n ldd) lnold
+	ln <- fmap catMaybes $ P.mapM (\n-> liftIO $ trainIO 100000 i e n ldd) lnold
 	--lift $ logDebugM $ "Length list result NN:" .< (P.length ln)
 	--lift $ logDebugM $ "Input train:" .< ldd
 	--lift $ logDebugM "Start: Neiron desctiptions in trainAdj"
@@ -220,12 +221,9 @@ trainAdjP p pe lldd = do
 	i <- liftIO $ randomRIO p
 	e <- liftIO $ randomRIO pe
 	lnold <- adjFst $ adjGetEnv
-	let ln = catMaybes $ P.map (\n-> P.foldr (\ ldd mn'-> (do
-			n' <- mn'
-			train 100000 i e n' ldd
-		) <|> (do
-			train 100000 i e n ldd
-		)) (Just n) lldd
+	ln <- fmap catMaybes $ P.mapM (\n-> P.foldrM (\ ldd mn'-> fmap join $
+			mapM (\n'-> liftIO $ trainIO 100000 i e n' ldd) mn'
+		) (Just n) lldd
 		) lnold
 	adjFst $ adjSetEnv ln (Identity ())
 
@@ -251,8 +249,8 @@ calculateAdj ld = do
 		lift $ logDebugM $ "w: " .< (ws n)
 		) l1) l2) lnold-}
 	--lift $ logDebugM "End: Neiron desctiptions"
-	let lh = fmap (hash . packNetwork) lnold
-	let lc = fmap (\n-> calculate n ld) lnold
+	lh <- mapM (fmap hash . liftIO . packNetworkIO) lnold
+	lc <- mapM (\n-> liftIO $ calculateIO n ld) lnold
 	ll <- adjSnd $ adjGetEnv
 	--lift $ logDebugM $ "List layers: " .< ll
 	--lift $ logDebugM $ "Input to calculate" .< ld
