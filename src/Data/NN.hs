@@ -939,14 +939,14 @@ restorationPow ::
 	) => 
 	(Double,Double) ->
 	(Double,Double) ->
-	a ->
+	Proxy a ->
 	RestorationCycle ->
 	SizeNN ->
 	Replicate ->
 	SerchInt ->
 	UpgradingInt ->
 	M.AdjointT f g m ()
-restorationPow p pe (ta :: a) rc snn r si ui = do
+restorationPow p pe (pa :: Proxy a) rc snn r si ui = do
 	lift $ logDebugM "Start: restorationPow"
 	(mplhl :: Maybe ([(Gr (Hashed a) HashNN)],[(Gr (Hashed a) HashNN)])) <- 
 		liftNNSccListAdjA $ adjNNSLliftHAG $ adjSnd viewHPairLeft -- viewHistoryLeft
@@ -1005,14 +1005,33 @@ restorationPowUp ::
 	SerchInt ->
 	UpgradingInt ->
 	M.AdjointT f g m ()
-restorationPowUp p pe pa rc snn r si ui = do
+restorationPowUp p pe (pa :: (a,a)) rc snn r si ui = do
 	lift $ logInfoM "Start: restorationPowUp"
 	lr <- liftNNSccListAdjA $ 
 		restorationNNSccLPrimerUp' p pe pa rc snn r si ui
-	liftNNSccListAdjA $ restorationNNSccLPrimerUpSafe lr
+	liftNNSccListAdjA $ restorationNNSccLPrimerUpSafe lr 
 	lift $ logInfoM "Post: restorationNNSccLPrimerUp'"
-	restorationPow p pe (fst pa) rc snn r si ui
+	restorationPow p pe (Proxy @a) rc snn r si ui
 	lift $ logInfoM "End: restorationPowUp"
+
+restorationPowUpN :: 
+	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a,
+		ClassNNSLPowAdj f g a, Adjunction f g, Traversable f,
+		MonadLoger m, Show a
+	) => 
+	(Double,Double) ->
+	(Double,Double) ->
+	Proxy a -> -- Proxy
+	RestorationCycle ->
+	SizeNN ->
+	Replicate ->
+	SerchInt ->
+	UpgradingInt ->
+	M.AdjointT f g m ()
+restorationPowUpN p pe pa rc snn r si ui = do
+	lift $ logInfoM "Start: restorationPowUpN"
+	restorationPow p pe pa rc snn r si ui
+	lift $ logInfoM "End: restorationPowUpN"
 
 type HashNNGr = HashNN
 
@@ -1281,6 +1300,31 @@ updateAssumptionPost p pe pa snn r si ui sar pr = do
 	restorationPowUp p pe pa sar snn r si ui 
 	lift $ logInfoM "End: updateAssumptionPost"
 
+updateAssumptionPostN :: 
+	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a,
+		ClassNNSLPowAdj f g a, ClassMapGrAdj f g a, ClassIMapNNRAdj f g,
+		MonadLoger m, Adjunction f g, Traversable f, NNSccListAdj f g a,
+		Show a
+	) => 
+	(Double,Double) ->
+	(Double,Double) ->
+	(a,a) ->
+	SizeNN ->
+	Replicate ->
+	SerchInt ->
+	UpgradingInt ->
+	SizeAssumptionRestoration -> 
+	( AllResult a
+	, ConsequenceResult a
+	) ->
+	M.AdjointT f g m ()
+updateAssumptionPostN p pe (pa :: (a,a)) snn r si ui sar pr = do
+	lift $ logInfoM "Start: updateAssumptionPostN"
+	safeTrueAssumptuonFull (snd pa) (fst pr)
+	lift $ logInfoM "Post: safeTrueAssumptuonFull"
+	restorationPowUpN p pe (Proxy @a) sar snn r si ui 
+	lift $ logInfoM "End: updateAssumptionPostN"
+
 type Recion0AdjL a =
 	IMapNNRCAdjL 
 		(MapGrAdjL 
@@ -1300,28 +1344,6 @@ type Recion0AdjR a =
 				a
 			) 
 			a)
-
-{-
-newtype Recion0AdjL a = Recion0AdjL
-	(IMapNNRCAdjL 
-		(MapGrAdjL 
-			( NNSLPowAdjL 
-				( NNSccListAdjL a
-				) 
-				a
-			) 
-			a)) deriving
-
-newtype Recion0AdjR a = Recion0AdjR
-	(IMapNNRCAdjR
-		(MapGrAdjR
-			( NNSLPowAdjR 
-				( NNSccListAdjR a
-				) 
-				a
-			) 
-			a)) deriving
--}
 
 type RecionNAdjL f a = 
 	IMapNNRCAdjL 
@@ -1499,47 +1521,6 @@ type instance ListMInputGr True n a = (RecoinPowGrT1 n a)
 type instance ListMInputGr False n a = (Maybe (RecoinPowGrT1 n a), ListMInputGr ((n - 1) <=? 0) (n - 1) a)
 
 type ListMInputGrT n a = ListMInputGr (n <=? 0) n a
-{-}
-type family FunUpdateRecoinPre (b :: Bool) (n :: Nat) m a where
-	FunUpdateRecoinPre False 0 m a = InputUpdateRecoinPre 0 a -> 
-		M.AdjointT 
-			(FRecionAdjLT1 0 a) 
-			(FRecionAdjRT1 0 a)
-			m (ListNRCT 0 a)
-	FunUpdateRecoinPre True n m a =
-		InputUpdateRecoinPre n a -> 
-			M.AdjointT 
-			(FRecionAdjLT1 n a) 
-			(FRecionAdjRT1 n a)
-			m (ListNRCT n a)
--}
-{-}	InputUpdateRecoinPre n a -> 
-	(ListNRCT n a -> c) -> 
-	FInputUpdateRecoinPre n a c
--}
-{-}	InputUpdateRecoinPre n a -> 
-	M.AdjointT 
-		(FRecionAdjLT1 n a) 
-		(FRecionAdjRT1 n a)
-		m (ListNRCT n a)
--}
--- type instance FunUpdateRecoinPre True 0 a = FunFIURPN0 -- FInputUpdateRecoinPre 0 a (ListNRCT 0 a)
-{-\ iurp -> updateRecoinPre'2
-	pa (SNat @0) 
-	(alfaIURP iurp) 
-	(errorIURP iurp) 
-	((listLMIGT iurp) :: a) 
-	(sizeNN iurp) 
-	(replicateIURP iurp) 
-	(searchIntIURP iurp) 
-	(upgradingIntIURP iurp) 
-	(sarIURP iurp)
--}
---type instance FunUpdateRecoinPre False n a = FunFIURPN
-{-\ iurp -> do
-	liftRecion $ (FunUpdateRecoinPre ((n - 1) <=? 0) (n - 1) a)
-	updateRecoinPre'1
--}
 
 type FunIURP n m a = InputUpdateRecoinPre n a -> 
 			M.AdjointT 
@@ -1547,7 +1528,7 @@ type FunIURP n m a = InputUpdateRecoinPre n a ->
 			(FRecionAdjRT1 n a)
 			m (ListNRCT n a)
 
-nextFunIURP :: (ListMInputGrT (n + 1) a ~ 
+type CxtMessRecoin m n a = (ListMInputGrT (n + 1) a ~ 
 	(Maybe (RecoinPowGrT1 (n + 1) a), ListMInputGr (n <=? 0) n a),
 	KnownNat n,
 	Adjunction (FRecionAdjL (n <=? 0) n a) (FRecionAdjR (n <=? 0) n a), 
@@ -1579,9 +1560,9 @@ nextFunIURP :: (ListMInputGrT (n + 1) a ~
 	ListDoubled (RecoinPowGrT1 n a), 
 	ClassNNSLPowAdj (FRecionAdjLT1 n a) (FRecionAdjRT1 n a) (RecoinPowGrT1 n a),
 	MonadLoger m, NNSccListAdj (FRecionAdjLT1 n a) (FRecionAdjRT1 n a) (RecoinPowGrT1 n a),
-	Traversable (FRecionAdjLT1 n a)
-	-- PowGr (PowGr (RecoinPowGr ((n + 1) <=? 0) (n + 1) a))
-	)
+	Traversable (FRecionAdjLT1 n a))
+
+nextFunIURP :: (CxtMessRecoin m n a)
 	=>
 	FunIURP n m a -> 
 	FunIURP (n + 1) m a
@@ -1631,112 +1612,6 @@ nextIURP (iurp :: InputUpdateRecoinPre (n + 1) a) = InputUpdateRecoinPre
 	(upgradingIntIURP iurp)
 	(sarIURP iurp)
 
-data FInputUpdateRecoinPre (n :: Nat) a b where
-	LiftFIURP :: FInputUpdateRecoinPre n a b -> FInputUpdateRecoinPre (n + 1) a b
-	FunFIURPN0 :: InputUpdateRecoinPre 0 a -> (ListNRCT 0 a -> b) -> FInputUpdateRecoinPre 0 a b
-	HeadListMInputGrT :: 
-		ListMInputGrT (n + 1) a -> 
-		((Maybe (RecoinPowGrT1 n a), ListMInputGr (n <=? 0) n a) -> b) ->
-		FInputUpdateRecoinPre n a b
-	{-FunFIURPN :: 
-		InputUpdateRecoinPre n a -> 
-		(ListNRCT n a -> b) -> 
-		FInputUpdateRecoinPre n a b-}
-{-}
-instance Functor (FInputUpdateRecoinPre n a) where
-	fmap f (LiftFIURP g) = LiftFIURP $ fmap f g
-	fmap f (FunFIURPN0 i g) = FunFIURPN0 i $ (f . g)
-	--fmap f (FunFIURPN i g) = FunFIURPN i $ (f . g)
--}
--- type FreeIURP n a = Free (FInputUpdateRecoinPre n a)
-{-}
-runFIURP ::	
-	(	Monad m, KnownNat n, Typeable n
-	) =>
-	Proxy a ->
-	SNat n ->
-	FreeIURP n a b -> 
-	M.AdjointT 
-		(FRecionAdjLT1 n a) 
-		(FRecionAdjRT1 n a)
-		m
-		b
-runFIURP (pa :: Proxy a) (sn :: SNat n) = hoistMAdj (\(Identity x)->return x) $ iterTM (f sn)
-	where
-		f (snn :: SNat n2) (LiftFIURP fiurp) = liftRecion $ f (SNat @(n2 - 1)) fiurp
-		f (snn :: SNat 0) (FunFIURPN0 iurp g) = 
-			fmap g $ updateRecoinPre'2 pa (SNat @0) 
-				(alfaIURP iurp) 
-				(errorIURP iurp) 
-				((listLMIGT iurp) :: a) 
-				(sizeNN iurp) 
-				(replicateIURP iurp) 
-				(searchIntIURP iurp) 
-				(upgradingIntIURP iurp) 
-				(sarIURP iurp)
-		f (snn :: SNat (n2 + 1)) (FunFIURPN iurp g) = 
-			fmap g $ do
-				mxy <- mapM (\gra->updateAssumptionPre 
-					(alfaIURP iurp) 
-					(errorIURP iurp) 
-					gra 
-					(sizeNN iurp) 
-					(replicateIURP iurp) 
-					(searchIntIURP iurp) 
-					(upgradingIntIURP iurp) 
-					(sarIURP iurp) ) $ (\(x,_,_)->x) (listLMIGT iurp :: ListMInputGrT (n2 + 1) a) 
-				return $ maybe (Map.empty, Map.empty) (\(x,y)->(x,y)) mxy
-				{- updateRecoinPre'1 pa (SNat @n2) 
-				(alfaIURP iurp) 
-				(errorIURP iurp) 
-				((listLMIGT iurp) :: ListMInputGrT n2 a) 
-				(sizeNN iurp) 
-				(replicateIURP iurp) 
-				(searchIntIURP iurp) 
-				(upgradingIntIURP iurp) 
-				(sarIURP iurp) -}
--}
-{-}
-updateRecoinPre'1 :: 
-	(	Monad m, KnownNat n, Typeable n{-,  (n <=? 0) ~ False,
-		Adjunction (FRecionAdjL (n <=? 0) n a) (FRecionAdjR (n <=? 0) n a),
-		NAllResult 0 a ~ AllResult a, NConsequenceResult 0 a ~ ConsequenceResult a,
-		ListNRCT 0 a ~ (NAllResult 0 a, NConsequenceResult 0 a),
-		ListMInputGrT 0 a ~ a-}
-	) =>
-	Proxy a ->
-	SNat n ->
-	(Double,Double) ->
-	(Double,Double) ->
-	ListMInputGrT (n+1) a ->
-	SizeNN ->
-	Replicate ->
-	SerchInt ->
-	UpgradingInt ->
-	SizeAssumptionRestoration -> 
-	M.AdjointT 
-		(FRecionAdjLT1 (n+1) a) 
-		(FRecionAdjRT1 (n+1) a)
-		m 
-		(NAllResult (n+1) a, NConsequenceResult (n+1) a)
-updateRecoinPre'1 (pa :: Proxy a) (sn :: SNat n) p pe ((mgra,l) :: ListMInputGrT (n + 1) a) snn r si ui sar
-	| fromSNat (SNat @(n + 1)) > 0 = do
-		(return () :: M.AdjointT 
-			(FRecionAdjLT1 (n + 1) a) 
-			(FRecionAdjRT1 (n + 1) a)
-			m ())
-		{-lnrct <- fromJust $ (do
-			n0 <- leftToMaybe $ decT @(SNat (n - 1)) @(SNat 0)
-			return $ liftRecion pa (SNat @(n - 1)) $ 
-				updateRecoinPre'1 pa (SNat @(n - 1)) p pe l snn r si ui sar) <|>
-			(do
-			n0 <- eqT @(SNat (n - 1)) @(SNat 0)
-			return $ liftRecion pa (SNat @0) $ 
-				updateRecoinPre'2 pa (SNat @0) p pe l snn r si ui sar
-			)-}
-		mxy <- mapM (\gra->updateAssumptionPre p pe gra snn r si ui sar) mgra 
-		return $ maybe (Map.empty, Map.empty) (\(x,y)->(x,y)) mxy
--}
 updateRecoinPre'2 ::
 	(	Monad m, KnownNat 0, Typeable 0, MonadIO m, Hashable a,
 		Adjunction (FRecionAdjL (0 <=? 0) 0 a) (FRecionAdjR (0 <=? 0) 0 a),
@@ -1766,30 +1641,78 @@ updateRecoinPre'2 (pa :: Proxy a) (sn :: SNat 0) p pe (a :: ListMInputGrT 0 a) s
 		(isJust $ eqT @(ListMInputGrT 0 a) @(ListMInputGrT 0 a)) -- &&
 		--(isLeft $ decT @a @(Maybe _,ListMInputGrT (0-1) a))
 		= do
-		{-(return () :: Monad m =>
-			(	M.AdjointT (FRecionAdjLT1 0 a) (FRecionAdjRT1 0 a) m () ~
-				M.AdjointT (FRecionAdjLT1 0 a) (FRecionAdjRT1 0 a) m ()
-				) 
-			=> M.AdjointT 
-				(FRecionAdjLT1 0 a) 
-				(FRecionAdjRT1 0 a)
-				m ())-}
+
 		let n0 = fromJust $ eqT @(SNat 0) @(SNat 0)
 		(r :: (AllResult a, ConsequenceResult a)) <- 
 			updateAssumptionPre p pe a snn r si ui sar
 		return @_ @(ListNRCT 0 a) r
-{-}			((gcastWith @_ @(SNat n) @(SNat 0) @(AllResult a, ConsequenceResult a) :: 
-				((SNat n) :~: (SNat 0)) -> ((SNat n) ~ (SNat 0) => (AllResult a, ConsequenceResult a))) 
-				n0 
-				r )-}
 
-type ReturnTLR n a = (	n ~ 0,
-				a ~ ListMInputGrT 0 a,
-				ListNRCT 0 a ~
-				(NAllResult 0 a, NConsequenceResult 0 a),
-				(NAllResult 0 a, NConsequenceResult 0 a) ~ 
-				(AllResult a, ConsequenceResult a) 
-				)
+type family ListMInputGrPost (b :: Bool) (n :: Nat) a -- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!adoihe
+-- knfh;oair'inalfdkbn'aoindrbo'iaehor';gin;osdifng&&&&&??????????????????????????????????????????????
+
+type instance ListMInputGrPost True n a = (RecoinPowGrT1 n a,RecoinPowGrT1 n a)
+
+type instance ListMInputGrPost False n a = (Proxy (RecoinPowGrT1 n a), ListMInputGrPost ((n - 1) <=? 0) (n - 1) a)
+
+type ListMInputGrPostT n a = ListMInputGrPost (n <=? 0) n a
+
+data InputUpdateRecoinPost n a = InputUpdateRecoinPost
+	{
+	proxyIURPost :: Proxy a,
+	snatIURPost :: SNat n ,
+	alfaIURPost :: (Double,Double),
+	errorIURPost :: (Double,Double),
+	listLMIGTPost :: ListMInputGrPostT n a,
+	sizeNNPost :: SizeNN ,
+	replicateIURPost :: Replicate,
+	searchIntIURPost :: SerchInt,
+	upgradingIntIURPost :: UpgradingInt,
+	sarIURPost :: SizeAssumptionRestoration,
+	lnrctIURP :: ListNRCT n a}
+
+type FunIURPost n a =
+	InputUpdateRecoinPost n a ->
+	M.AdjointT 
+		(FRecionAdjLT1 n a) 
+		(FRecionAdjRT1 n a)
+		m ()
+
+
+nextUpdateIURPost ::
+	FunIURPost n a ->
+	FunIURPost (n + 1) a
+
+nextIURPost :: 
+	(	CxtMessRecoin m n a, ListMInputGrPostT (n + 1) a ~ 
+		(Proxy (RecoinPowGrT1 n a), ListMInputGrPost (n <=? 0) n a)
+	) =>
+	InputUpdateRecoinPost (n + 1) a -> 
+	InputUpdateRecoinPost n a
+nextIURPost (iurp :: InputUpdateRecoinPost (n + 1) a) = iurp
+	{ snatIURPost = SNat @n
+	, listLMIGTPost = snd $ listLMIGTPost iurp
+	, lnrctIURP = (\(_,_,x)->x) $ lnrctIURP iurp
+}
+
+updateRecoinPost0 :: 
+	(	CxtMessRecoin m 0 a, ClassMapGrAdj (Recion0AdjL a) (Recion0AdjR a) (PowGr a),
+		Show a) =>
+	InputUpdateRecoinPost 0 a ->
+	M.AdjointT 
+		(FRecionAdjLT1 0 a) 
+		(FRecionAdjRT1 0 a)
+		m ()
+updateRecoinPost0 iurp = do
+	updateAssumptionPost 
+		(alfaIURPost iurp) 
+		(errorIURPost iurp)
+		(listLMIGTPost iurp) 
+		(sizeNNPost iurp)
+		(replicateIURPost iurp) 
+		(searchIntIURPost iurp)
+		(upgradingIntIURPost iurp) 
+		(sarIURPost iurp)
+		(lnrctIURP iurp)
 
 data ConfNN = ConfNN 
 	{ confLRA :: (Double,Double)
