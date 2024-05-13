@@ -38,6 +38,7 @@ import Data.Either
 import Data.Either.Combinators
 import Data.Graph.Inductive.PatriciaTree as G
 import Data.Graph.Inductive.Graph as G
+import Data.Graph.Inductive.Query.DFS
 -- import Data.Graph.Inductive.Monad.IOArray as G
 -- import Data.Graph.Inductive.Monad as G
 import Data.ByteString as B
@@ -886,7 +887,7 @@ instance ListDoubled a => ListDoubled (PowGr a) where
 			) [] a
 		where
 			addLengthPN :: a -> [Double] -> [Double]
-			addLengthPN v lpn
+			addLengthPN v lpn -- 4 ~ toDL Network
 				| (lle v) > 4 = lpn ++ (P.replicate ((lle v) - 4) 0)
 			addLengthPN _ lpn = lpn
 			addLengthV :: a -> [Double] -> [Double]
@@ -1308,7 +1309,7 @@ updateAssumptionPostN ::
 	) => 
 	(Double,Double) ->
 	(Double,Double) ->
-	(a,a) ->
+	a ->
 	SizeNN ->
 	Replicate ->
 	SerchInt ->
@@ -1318,9 +1319,9 @@ updateAssumptionPostN ::
 	, ConsequenceResult a
 	) ->
 	M.AdjointT f g m ()
-updateAssumptionPostN p pe (pa :: (a,a)) snn r si ui sar pr = do
+updateAssumptionPostN p pe (a :: a) snn r si ui sar pr = do
 	lift $ logInfoM "Start: updateAssumptionPostN"
-	safeTrueAssumptuonFull (snd pa) (fst pr)
+	safeTrueAssumptuonFull a (fst pr)
 	lift $ logInfoM "Post: safeTrueAssumptuonFull"
 	restorationPowUpN p pe (Proxy @a) sar snn r si ui 
 	lift $ logInfoM "End: updateAssumptionPostN"
@@ -1670,17 +1671,77 @@ data InputUpdateRecoinPost n a = InputUpdateRecoinPost
 	sarIURPost :: SizeAssumptionRestoration,
 	lnrctIURP :: ListNRCT n a}
 
-type FunIURPost n a =
+type FunIURPost m n a =
 	InputUpdateRecoinPost n a ->
 	M.AdjointT 
 		(FRecionAdjLT1 n a) 
 		(FRecionAdjRT1 n a)
 		m ()
 
+metricRPgr0 :: 
+	ListDoubled (RecoinPowGrT1 0 a) => 
+	RecoinPowGrT1 0 a -> 
+	RecoinPowGrT1 0 a -> 
+	Double
+metricRPgr0 rpg1 rpg2 = 
+	sum $
+	fmap sum $
+	(fmap . fmap) (\(x,y)-> abs $ x - y) $ 
+	(P.zipWith P.zip) (toLD rpg1) (toLD rpg2)
+
+type MetricRPgrN n a =
+	RecoinPowGrT1 n a -> 
+	RecoinPowGrT1 n a -> 
+	Double
+
+metricRPgrN :: 
+	(CxtMessRecoin m n a, ListDoubled (RecoinPowGrT1 n a)) => 
+	MetricRPgrN n a -> 
+	MetricRPgrN (n + 1) a  
+metricRPgrN f rpg1 rpg2 = ra + rpn
+	where
+		ra = sld + (mld * ml)
+		ld = P.zipWith f tpa1 tpa2
+		sld = sum ld
+		mld = sld / (fromIntegral $ P.length ld)
+		ml = fromIntegral $ abs $ (P.length tpn1) - (P.length tpn2)
+		tpa1 = fmap (fromJust . lab rpg1) tpn1
+		tpa2 = fmap (fromJust . lab rpg2) tpn2
+		tpn1 = topsort rpg1
+		tpn2 = topsort rpg2
+		ldfs1 = dfsWith id tpn1 rpg1
+		ldfs2 = dfsWith id tpn2 rpg2
+		rpn = sum $ P.zipWith (\c1 c2-> sum $
+			P.zipWith (\(x1,_) (x2,_)->metric x1 x2) (lneighbors' c1) (lneighbors' c2)
+			) ldfs1 ldfs2
+	-- (P.zipWith P.zip) (toLD rpg1) (toLD rpg2)
+
+metricRPgr :: 
+	(CxtMessRecoin m n a, ListDoubled (RecoinPowGrT1 n a)) =>
+	RecoinPowGrT1 n a -> -- n = 0 + > 0
+	RecoinPowGrT1 n a -> 
+	Double
+metricRPgr (rpg1 :: RecoinPowGrT1 n a) rpg2 = metricRPgrN metricRPgr rpg1 rpg2
+metricRPgr (rpg1 :: RecoinPowGrT1 0 a) rpg2 = metricRPgr0 rpg1 rpg2
 
 nextUpdateIURPost ::
-	FunIURPost n a ->
-	FunIURPost (n + 1) a
+	(	CxtMessRecoin m n a, ListMInputGrPostT (n + 1) a ~ 
+		(Proxy (RecoinPowGrT1 n a), ListMInputGrPost (n <=? 0) n a), MonadIO m,
+		CxtMessRecoin m (n + 1) a, ClassNNSLPowAdj 
+	) =>
+	FunIURPost m n a ->
+	FunIURPost m (n + 1) a
+nextUpdateIURPost (fiurpn :: FunIURPost m n a) iurpnn = do
+	(return () :: M.AdjointT 
+		(FRecionAdjLT1 (n + 1) a) 
+		(FRecionAdjRT1 (n + 1) a)
+		m ())
+	liftRecion (proxyIURPost iurpnn) (SNat @n) $ fiurpn $ nextIURPost iurpnn
+	(lrgr :: [RecoinPowGrT1 (n + 1) a]) <-
+		liftNNSccListAdjA @(FRecionAdjLT1 (n + 1) a) @(FRecionAdjRT1 (n + 1) a) $ 
+		(adjNNSLliftHAG $ adjSnd viewHistoryLeft) >>= (mapM toPowGr . join . maybeToList)
+	-- updateAssumptionPostN
+	undefined
 
 nextIURPost :: 
 	(	CxtMessRecoin m n a, ListMInputGrPostT (n + 1) a ~ 
