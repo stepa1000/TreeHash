@@ -139,7 +139,7 @@ initNNS spw = do
 	where
 		dnnD = DataNNSLPow 
 				(DataNN [7,3,7] IMap.empty 11)
-				(DataNN [1,3,1] IMap.empty 11)
+				(DataNN [1,3,3,1] IMap.empty 11)
 				Map.empty
 				IMap.empty
 				(ConfNN 
@@ -153,7 +153,7 @@ initNNS spw = do
 					)
 
 instance ListDoubled Word8 where
-	toLD a = [[fromIntegral a]]
+	toLD a = [[fromIntegral a]] -- ????
 	fromLD (x:[]) _ = round x
 	emptyLDA = 0
 

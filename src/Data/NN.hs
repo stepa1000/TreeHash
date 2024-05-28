@@ -244,7 +244,7 @@ calculateAdj ::
 		m 
 		[(Hash,[Double])]
 calculateAdj ld = do
-	--lift $ logDebugM "Start: calculateAdj"
+	lift $ logDebugM "Start: calculateAdj"
 	lnold <- adjFst $ adjGetEnv
 	--lift $ logDebugM $ "Length list NN: " .< (P.length lnold)
 	--lift $ logDebugM "Start: Neiron desctiptions"
@@ -261,7 +261,7 @@ calculateAdj ld = do
 	--lift $ logDebugM $ "List layers: " .< ll
 	--lift $ logDebugM $ "Input to calculate" .< ld
 	--lift $ logDebugM $ "List result calculate: " .< lc
-	--lift $ logDebugM "End: calculateAdj"
+	lift $ logDebugM "End: calculateAdj"
 	return $ P.zip lh lc
 
 class ListDoubled a where
@@ -280,20 +280,27 @@ calculateAdjLD ::
 		m
 		[(HashNN,a)]
 calculateAdjLD a = do
-	--lift $ logDebugM "Start:calculateAdjLD"
+	lift $ logDebugM "Start:calculateAdjLD"
 	llhld <- mapM calculateAdj $ toLD a
+	lift $ logDebugM $ "calculate head list:" .< (P.length $ P.head llhld)
 	--lift $ logDebugM $ "List hashes: " .< ((fmap . fmap) fst llhld)
 	--lift $ logDebugM $ "Length list calculate: " .< (P.length llhld)
 	-- lift $ logDebugM $ "Elements calculate:" .< 
 	let llhEa = (fmap . fmap) (\(h,ld)->(h,Endo $ fromLD ld)) llhld
 	--when (P.length llhEa == 0) $ error "calculateAdjLD:length llhEa == 0"
-	let mlha = P.foldr (\x my -> my >>= (return . f x)) Nothing llhEa
-	--lift $ logDebugM $ "Length list calculate result: " .< (P.length lha)
-	let r = fmap (\(h,ea)->(h,(appEndo ea) emptyLDA)) $ join $ maybeToList mlha
-	--lift $ logDebugM $ "List hashes: " .< (fmap fst r)
-	--lift $ logDebugM $ "Length list endo applayed: " .< (P.length r)
-	--lift $ logDebugM "End:calculateAdjLD"
-	return r
+	if (P.length llhEa) /= 0 
+		then do
+		let lha = P.foldr1 (\x y -> f x y) llhEa
+		lift $ logDebugM $ "Length list calculate result: " .< (P.length lha)
+		let r = fmap (\(h,ea)->(h,(appEndo ea) emptyLDA)) lha
+		--lift $ logDebugM $ "List hashes: " .< (fmap fst r)
+		--lift $ logDebugM $ "Length list endo applayed: " .< (P.length r)
+		lift $ logDebugM "End:calculateAdjLD"
+		return r
+		else do
+		lift $ logDebugM "End:calculateAdjLD"
+		lift $ logWarningM "sterilrzrd list length 0"	
+		return []
 	where
 		f !xl !yl = fmap g $ P.zip xl yl
 		g = (\((!hx,!ax),(!hy,!ay))->
@@ -351,7 +358,7 @@ type NNGrAdjL a = (Env (Gr (Hashed a) HashNN)) :.: AdjNetworkL
 
 type NNGrAdjR a = AdjNetworkR :.: (Reader (Gr (Hashed a) HashNN))
   
-getSccArtPoint :: (Monad m, MonadIO m, Hashable a, Eq a) => 
+getSccArtPoint :: (Monad m, MonadIO m, Hashable a, Eq a, MonadLoger m) => 
 	M.AdjointT 
 		(NNGrAdjL a) 
 		(NNGrAdjR a)
@@ -359,6 +366,8 @@ getSccArtPoint :: (Monad m, MonadIO m, Hashable a, Eq a) =>
 		[Gr (Hashed a) HashNN]
 getSccArtPoint = do
 	gr <- adjFst $ adjGetEnv
+	lift $ logDebugM $ "!!! getSccArtPoint: Length graph:" .< (P.length $ labNodes gr)
+	--return $ 
 	liftIO $ sccArtPointIO gr
 
 upNNGr :: (Monad m, MonadIO m, Hashable a, ListDoubled a, Eq a, MonadLoger m) =>
@@ -382,6 +391,7 @@ upNNGr = do
 	mapM_ (\a-> do
 		lr <- adjSnd $ calculateAdjLD $ unhashed a
 		let lnewNodes = newNodes (P.length lr) gr
+		lift $ logDebugM $ "upNNGR: Length result:" .< (P.length lr)
 		lift $ logDebugM "Post: calculateAdjLD"
 		adjFst $ adjSetEnv 
 			(withStrategy rseq $ P.foldr 
@@ -447,8 +457,9 @@ upgradingNNGr d1 d2 pa r si ui = do
 	adjFst $ adjSetEnv 
 		(P.foldr (\i b->insNode (i,hashed $ snd pa) b) gr $ newNodes 1 gr) (Identity ())
 	mapM_ (\i-> do
-		onlyScc
+		--onlyScc
 		updatingNNGr si
+		onlyScc
 		lift $ logDebugM $ "Post: updatingNNGr: index: " .< i  -- logDebugM
 		) [0,1..ui]
 	lift $ logInfoM "End: upgradingNNGr"  -- logDebugM
