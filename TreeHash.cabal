@@ -50,6 +50,7 @@ library
     , bpann-my
     , bytestring
     , comonad
+    , constraints
     , containers
     , either
     , fgl
@@ -81,6 +82,7 @@ executable TreeHash-exe
     , bpann-my
     , bytestring
     , comonad
+    , constraints
     , containers
     , either
     , fgl
@@ -113,6 +115,7 @@ test-suite TreeHash-test
     , bpann-my
     , bytestring
     , comonad
+    , constraints
     , containers
     , either
     , fgl

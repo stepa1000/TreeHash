@@ -22,6 +22,10 @@ resolver: nightly-2024-05-01 # lts-22.18
 apply-ghc-options: everything
 rebuild-ghc-options: true
 
+nix: # nix corupted package
+  enable: true
+  packages: [freeglut]
+
 # User packages to be built.
 # Various formats can be used as shown in the example below.
 #

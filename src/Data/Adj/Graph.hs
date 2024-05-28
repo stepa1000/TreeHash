@@ -17,6 +17,7 @@ import Data.Maybe
 import Data.Graph.Inductive.PatriciaTree as G
 import Data.Graph.Inductive.Graph as G
 import Data.Graph.Inductive.Query.DFS as G
+import Data.Graph.Inductive.Query.BCC as G
 import Data.Graph.Inductive.Query.ArtPoint as G
 import Data.Graph.Inductive.Monad.IOArray as G
 import Data.Graph.Inductive.Monad as G
@@ -129,20 +130,60 @@ getSccGrGraph = do
 	ln <- getSccGrNode
 	return $ fmap (\l->subgraph l gr) ln
 
-sccArtPoint :: Gr a b -> [Gr a b]
-sccArtPoint gr 
+sccArtPointBcc :: Gr a b -> [Gr a b]
+sccArtPointBcc gr 
 	| G.isEmpty gr = []
 	| P.length (labNodes gr) == 1 = [gr]
-sccArtPoint gr = (f $ P.foldr (\a b->G.delNode a b) gr artP)
+sccArtPointBcc gr = f gr
 	where
 		f grn 
 			| G.isEmpty grn = [] 
 			| P.length (labNodes grn) == 1 = [grn]
-		f grn = join $ fmap (\l-> sccArtPoint $ subgraph l grn) lp
+		f grn = (join $ fmap (\l-> sccArtPointBcc l) lp) ++ lp
 			where
-				lp = G.scc grn
-		artP = G.ap gr
+				lp = G.bcc grn
 
+sccArtPoint :: Gr a b -> [Gr a b]
+sccArtPoint gr 
+	| G.isEmpty gr = []
+	| P.length (labNodes gr) == 1 = [gr]
+sccArtPoint gr = (f gr)
+	where
+		f grn 
+			| G.isEmpty grn = [] 
+			| P.length (labNodes grn) == 1 = [grn]
+		f grn = (join $ 
+				fmap (\l-> sccArtPoint $ 
+					P.foldr (\a b->G.delNode a b) l artP) grn2
+					) ++ grn2
+			where
+				grn2 = fmap (\lp -> subgraph lp grn) llp
+				llp = G.scc grn
+				artP = G.ap grn
+
+sccArtPointIO :: Gr a b -> IO [Gr a b]
+sccArtPointIO gr 
+	| G.isEmpty gr = return []
+	| P.length (labNodes gr) == 1 = return [gr]
+sccArtPointIO gr = do
+	f gr
+	where	
+		f grn 
+			| G.isEmpty grn = return [] 
+			| P.length (labNodes grn) == 1 = return [grn]
+		f grn = do
+			let lgrn2 = fmap (\lp-> subgraph lp grn) llp
+			fmap join $ mapM (\grn2->do
+				let artP = G.ap grn2
+				mrap <- getRandomElementList artP
+				fmap (join . maybeToList) $ mapM (\rap->do
+					let grn3 = G.delNode rap grn2
+					lgr <- f grn3
+					return $ grn2:lgr
+					) mrap
+				) lgrn2
+			where
+				llp = G.scc grn
 
 getTopsort :: (Monad m, Hashable a, Eq a, Show a) =>
 	M.AdjointT 

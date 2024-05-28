@@ -38,6 +38,8 @@ dependencies:
 - parallel
 - either
 - free 
+- constraints
+  # - template-haskell
 
 ghc-options:
 - -Wall

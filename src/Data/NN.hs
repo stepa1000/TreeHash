@@ -23,6 +23,8 @@
 module Data.NN where
 
 import Prelude as P
+import Data.Constraint
+-- import Language.Haskell.TH.Syntax (Cxt)
 import Data.List as P
 import Data.Foldable as P
 import Data.Sequence as Seq 
@@ -40,7 +42,7 @@ import Data.Graph.Inductive.PatriciaTree as G
 import Data.Graph.Inductive.Graph as G
 import Data.Graph.Inductive.Query.DFS
 -- import Data.Graph.Inductive.Monad.IOArray as G
--- import Data.Graph.Inductive.Monad as G
+-- import Data.Graph.Inductive.Monad as G 
 import Data.ByteString as B
 import Data.Word
 import Data.Aeson as Aeson
@@ -265,11 +267,12 @@ calculateAdj ld = do
 class ListDoubled a where
 	toLD :: a -> [[Double]]
 	fromLD :: [Double] -> a -> a
+	emptyLDA :: a
 
 calculateAdjLD :: 
 	(	Monad m, MonadIO m, ListDoubled a,
 		MonadLoger m
-	) => 
+	) =>
 	a ->
 	M.AdjointT 
 		AdjNetworkL 
@@ -283,9 +286,10 @@ calculateAdjLD a = do
 	--lift $ logDebugM $ "Length list calculate: " .< (P.length llhld)
 	-- lift $ logDebugM $ "Elements calculate:" .< 
 	let llhEa = (fmap . fmap) (\(h,ld)->(h,Endo $ fromLD ld)) llhld
-	let lha = P.foldr1 f llhEa
+	--when (P.length llhEa == 0) $ error "calculateAdjLD:length llhEa == 0"
+	let mlha = P.foldr (\x my -> my >>= (return . f x)) Nothing llhEa
 	--lift $ logDebugM $ "Length list calculate result: " .< (P.length lha)
-	let r = fmap (\(h,ea)->(h,(appEndo ea) a)) lha
+	let r = fmap (\(h,ea)->(h,(appEndo ea) emptyLDA)) $ join $ maybeToList mlha
 	--lift $ logDebugM $ "List hashes: " .< (fmap fst r)
 	--lift $ logDebugM $ "Length list endo applayed: " .< (P.length r)
 	--lift $ logDebugM "End:calculateAdjLD"
@@ -355,9 +359,9 @@ getSccArtPoint :: (Monad m, MonadIO m, Hashable a, Eq a) =>
 		[Gr (Hashed a) HashNN]
 getSccArtPoint = do
 	gr <- adjFst $ adjGetEnv
-	return $ sccArtPoint gr
+	liftIO $ sccArtPointIO gr
 
-upNNGr :: (Monad m, MonadIO m, Hashable a, ListDoubled a, Eq a, MonadLoger m) => 
+upNNGr :: (Monad m, MonadIO m, Hashable a, ListDoubled a, Eq a, MonadLoger m) =>
 	M.AdjointT 
 		(NNGrAdjL a) 
 		(NNGrAdjR a)
@@ -370,6 +374,7 @@ upNNGr = do
 	gct1 <- liftIO getCurrentTime 
 	let ln = withStrategy (seqList rseq) $ G.labNodes gr
 	lift $ logDebugM $ "Length list node graph: " .< (P.length ln)
+	lift $ logDebugM $ "Length list edge graph: " .< (P.length $ G.labEdges gr)	
 	gct2 <- liftIO getCurrentTime 
 	lift $ logDebugM $ "diff time on labNodes: " .< (diffUTCTime gct2 gct1)
 	rnode <- liftIO $ getRandomElementList ln
@@ -407,15 +412,16 @@ updatingNNGr si = do
 
 type UpgradingInt = Int
 
-onlyScc :: (Monad m, MonadIO m, Hashable a, Eq a) => 
+onlyScc :: (Monad m, MonadIO m, Hashable a, Eq a, MonadLoger m) => 
 	M.AdjointT 
 		(NNGrAdjL a) 
 		(NNGrAdjR a)
-		m 
+		m
 		()
 onlyScc = do
 	ln <- adjFst $ fmap join $ getSccGrNode
 	gr <- adjFst $ adjGetEnv
+	lift $ logDebugM $ "onlyScc: length list elements graph: " .< (P.length $ labNodes $ subgraph ln gr)
 	adjFst $ adjSetEnv (subgraph ln gr) (Identity ())
 
 upgradingNNGr :: 
@@ -479,7 +485,7 @@ getNNMI h = do
 	ln <- adjFst $ adjGetEnv
 	return $ IMap.lookup h ln
 
-safeNNScc :: (Monad m, MonadIO m, Hashable a, Eq a) => 
+safeNNScc :: (Monad m, MonadIO m, Hashable a, Eq a, MonadLoger m) => 
 	M.AdjointT 
 		(NNPrimeAdjL a) 
 		(NNPrimeAdjR a)
@@ -673,7 +679,7 @@ adjNNSLliftHAG :: Monad m =>
 		m
 		b
 adjNNSLliftHAG = adjFst
-
+{-
 addToHSccList :: (Monad m, MonadIO m, Hashable a, Eq a, Hashable (Gr (Hashed a) HashNN)) => 
 	[HashScc] ->
 	M.AdjointT 
@@ -685,7 +691,7 @@ addToHSccList lh = do
 	(lscc :: [Gr (Hashed a) HashNN]) <- adjNNSLliftAdjNNGr getSccArtPoint
 	adjNNSLliftHAG $ addToLHistoryLeft $ P.filter (\scc-> P.elem (hash $ scc) lh) lscc
 	return ()
-
+-}
 newtype ShortDL a = ShortDL a deriving ()
 
 unShortDL (ShortDL a) = a
@@ -867,6 +873,7 @@ instance ListDoubled [[PackedNeuron]] where
 				| z > 0 && P.null l = 0 : (toz (z-1) l)
 				| z == 0 && not (P.null l) = dl ++ (P.tail l)
 				| z == 0 && P.null l = dl
+	emptyLDA = []
 
 instance ListDoubled a => ListDoubled (PowGr a) where
 	-- toLD :: a -> [[Double]]
@@ -894,11 +901,13 @@ instance ListDoubled a => ListDoubled (PowGr a) where
 			addLengthV v l 
 				| (lle v) < 4 = l ++ (P.replicate (4 - (lle v)) 0)
 			addLengthV _ l = l
-			lle v = P.foldr1 (\x y-> 
+			lle v 
+				| P.length (toLD v) /= 0 = P.foldr1 (\x y-> 
 				if x == y 
 					then x 
 					else error "ListDoubled a not eq"
 				) $ fmap P.length $ toLD v
+			lle v = error "toLD:length toDL v == 0"
 	-- fromLD :: [Double] -> a -> a
 	fromLD (i:di:dj:ld) gr = case i of 
 			0 -> maybe gr id $
@@ -915,6 +924,7 @@ instance ListDoubled a => ListDoubled (PowGr a) where
 					l' = P.filter (\(d,i)->i /= j) l
 			(mc,gr') = match (round di) gr
 	fromLD _ gr = gr
+	emptyLDA = G.empty
 
 class ClassNNSLPowAdj f g a where
 	liftNNSccListAdjGr :: (Monad m) =>
@@ -953,6 +963,7 @@ restorationPow p pe (pa :: Proxy a) rc snn r si ui = do
 		liftNNSccListAdjA $ adjNNSLliftHAG $ adjSnd viewHPairLeft -- viewHistoryLeft
 	s <- liftNNSccListAdjA @_ @_ @a $ adjNNSLliftHAG $ adjSnd adjGetEnv 
 	lift $ logDebugM $ "Seq list length scc:" .< (fmap P.length s)
+	lift $ logDebugM $ "Seq head length scc:" .< ((fmap . fmap) (P.length . labNodes) s)
 	--mlhgr <- liftNNSccListAdjGr $ adjNNSLliftHAG $ viewHistoryLeft
 	mapM_ (\((xl::[(Gr (Hashed a) HashNN)]),(yl::[(Gr (Hashed a) HashNN)]))-> do
 		let lp = join $ fmap (\y->fmap (\x->(x,y)) xl) yl
@@ -966,29 +977,34 @@ restorationPow p pe (pa :: Proxy a) rc snn r si ui = do
 		impngr <- if not (P.null limpngr) 
 			then return $ P.toList $ unionScc limpngr
 			else return [([],[])]
-		im <- fmap ((\(x,y,t)->(x,y)) . P.foldr1 (\(x1,y1,t1) (x2,y2,t2)-> 
-				if t1 < t2
-					then (x1,y1,t1)
-					else (x2,y2,t2)
-				)) $
+		lift $ logDebugM "Post:foldr"
+		mim <- fmap (fmap (\(x,y,t)->(x,y)) . P.foldr (\(x1,y1,t1) mtuple -> case mtuple of
+				(Just (x2,y2,t2)) ->
+					if t1 < t2
+						then Just (x1,y1,t1)
+						else Just (x2,y2,t2)
+				Nothing -> Just (x1,y1,t1)
+				) Nothing) $
 			mapM (\(pn,lgr)->do
 			sm <- fmap P.sum $ mapM (\(pn2,lgr2)->do
 				return $ metric pn pn2
 				) impngr 
 			return (pn,lgr,sm)
 			) impngr
-		let rl = P.filter (\x-> IMap.member (hash $ fst im) x) limpngr
-		lift $ logDebugM $ "List result restorationPow: " .< (P.length rl)
-		mr <- liftIO $ getRandomElementList rl
-		mapM_ (\r-> do
-			{-r' <- mapM (\(x,yl)->do
-				yl' <- mapM (\y->do
-					liftNNSccListAdjA $ toPowGr y
-					) yl
-				return (x,yl')
-				) r-}
-			liftNNSccListAdjGr @_ @_ @a $ restorationNNSccLPrimerUpSafe r
-			) mr
+		mapM (\im->do
+			let rl = P.filter (\x-> IMap.member (hash $ fst im) x) limpngr
+			lift $ logDebugM $ "List result restorationPow: " .< (P.length rl)
+			mr <- liftIO $ getRandomElementList rl
+			mapM_ (\r-> do
+				{-r' <- mapM (\(x,yl)->do
+					yl' <- mapM (\y->do
+						liftNNSccListAdjA $ toPowGr y
+						) yl
+					return (x,yl')
+					) r-}
+				liftNNSccListAdjGr @_ @_ @a $ restorationNNSccLPrimerUpSafe r
+				) mr
+			) mim
 		) mplhl
 	lift $ logDebugM "End: restorationPow"
 
@@ -1716,27 +1732,40 @@ metricRPgrN f rpg1 rpg2 = ra + rpn
 			) ldfs1 ldfs2
 	-- (P.zipWith P.zip) (toLD rpg1) (toLD rpg2)
 
+type family CxtMetricRPG (b :: Bool) (m :: * -> *) (n :: Nat) a :: Constraint
+
+type instance CxtMetricRPG True m 0 a = (CxtMessRecoin m 0 a, ListDoubled (RecoinPowGrT1 0 a))
+
+type instance CxtMetricRPG False m n a = (CxtMessRecoin m n a, ListDoubled (RecoinPowGrT1 n a), CxtMetricRPG ((n - 1) <=? 0) m (n-1) a)
+
+type CxtMetricRPGT m n a = CxtMetricRPG (n <=? 0) m n a 
+{-
 metricRPgr :: 
-	(CxtMessRecoin m n a, ListDoubled (RecoinPowGrT1 n a)) =>
+	(CxtMessRecoin m n a, ListDoubled (RecoinPowGrT1 n a),
+		CxtMetricRPGT m n a
+	) =>
 	RecoinPowGrT1 n a -> -- n = 0 + > 0
 	RecoinPowGrT1 n a -> 
 	Double
-metricRPgr (rpg1 :: RecoinPowGrT1 n a) rpg2 = metricRPgrN metricRPgr rpg1 rpg2
-metricRPgr (rpg1 :: RecoinPowGrT1 0 a) rpg2 = metricRPgr0 rpg1 rpg2
+metricRPgr (rpg1 :: RecoinPowGrT1 n a) rpg2 = case SNat @n of 
+	(SNat @ metricRPgrN metricRPgr rpg1 rpg2-}
+-- metricRPgr (rpg1 :: RecoinPowGrT1 0 a) rpg2 = metricRPgr0 rpg1 rpg2
 
 nextUpdateIURPost ::
 	(	CxtMessRecoin m n a, ListMInputGrPostT (n + 1) a ~ 
 		(Proxy (RecoinPowGrT1 n a), ListMInputGrPost (n <=? 0) n a), MonadIO m,
-		CxtMessRecoin m (n + 1) a, ClassNNSLPowAdj 
+		CxtMessRecoin m (n + 1) a, KnownNat n, 
+		ClassNNSLPowAdj (FRecionAdjLT1 (n + 1) a) (FRecionAdjRT1 (n + 1) a) (RecoinPowGrT1 n a)
 	) =>
+	SNat n ->
 	FunIURPost m n a ->
 	FunIURPost m (n + 1) a
-nextUpdateIURPost (fiurpn :: FunIURPost m n a) iurpnn = do
+nextUpdateIURPost (sn :: SNat n) (fiurpn :: FunIURPost m n a) iurpnn = do
 	(return () :: M.AdjointT 
 		(FRecionAdjLT1 (n + 1) a) 
 		(FRecionAdjRT1 (n + 1) a)
 		m ())
-	liftRecion (proxyIURPost iurpnn) (SNat @n) $ fiurpn $ nextIURPost iurpnn
+	liftRecion (proxyIURPost iurpnn) (SNat @n) $ fiurpn $ nextIURPost @m iurpnn
 	(lrgr :: [RecoinPowGrT1 (n + 1) a]) <-
 		liftNNSccListAdjA @(FRecionAdjLT1 (n + 1) a) @(FRecionAdjRT1 (n + 1) a) $ 
 		(adjNNSLliftHAG $ adjSnd viewHistoryLeft) >>= (mapM toPowGr . join . maybeToList)

@@ -138,23 +138,24 @@ initNNS spw = do
 		_ -> encodeFile @(DataNNSLPow PWord) (fileNNForState spw) dnnD
 	where
 		dnnD = DataNNSLPow 
-				(DataNN [7,7,7] IMap.empty 11)
-				(DataNN [1,2,1] IMap.empty 11)
+				(DataNN [7,3,7] IMap.empty 11)
+				(DataNN [1,3,1] IMap.empty 11)
 				Map.empty
 				IMap.empty
 				(ConfNN 
 					(0.5,1.5)
 					(0.0001,0.001)
 					100
-					3
-					3
-					3
-					3
+					11
+					11
+					11
+					11
 					)
 
 instance ListDoubled Word8 where
 	toLD a = [[fromIntegral a]]
 	fromLD (x:[]) _ = round x
+	emptyLDA = 0
 
 startlTNN :: MVar String -> SettingNN -> AdjunctorNN Word8 ()
 startlTNN mvs spw = do
