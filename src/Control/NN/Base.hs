@@ -33,6 +33,8 @@ import Data.ByteString as B
 import Data.Word
 import Data.Aeson as Aeson
 import Data.Time.Clock
+-- import Data.Profunctor.Mapping
+-- import Data.Profunctor.Traaversing
 import Debug.Trace
 import Control.Monad.Trans.Adjoint as M
 import Data.Functor.Adjunction
@@ -70,9 +72,9 @@ type SysCNetwork sys = SysContainer sys (SysNetwork sys) -- = [Network]
 
 type family SysConfigNetwork sys -- Layers = [Int]
 
-type AdjSysNetworkL sys = (Env (SysCNetwork sys)) :.: (Env (SysConfigNetwork sys))
+-- type AdjSysNetworkL sys = (Env (SysCNetwork sys)) :.: (Env (SysConfigNetwork sys))
 
-type AdjSysNetworkR sys = (Reader (SysConfigNetwork sys)) :.: (Reader (SysCNetwork sys)) 
+-- type AdjSysNetworkR sys = (Reader (SysConfigNetwork sys)) :.: (Reader (SysCNetwork sys)) 
 
 type family ArrSys sys :: * -> * -> *
 
@@ -156,6 +158,8 @@ type family SysTrainData sys
 
 type family SysAttemptTrain sys
 
+type family SysList sys
+
 data HandlerSysTrain sys = HandlerSysTrain
 	{ sysGetCNetwork :: ArrSys sys () (SysCNetwork sys)
 	, sysSetCNetworkT :: ArrSys sys (SysCNetwork sys) ()
@@ -165,7 +169,7 @@ data HandlerSysTrain sys = HandlerSysTrain
 			, SysAlfa sys
 			, SysErrorTrain sys
 			, SysNetwork sys
-			, [SysTrainData sys]
+			, SysList sys (SysTrainData sys)
 			)
 			(Maybe (SysNetwork sys))
 	, sysCatMaybes :: 
@@ -184,7 +188,7 @@ sysTrain ::
 		( SysAlfa sys
 		, SysErrorTrain sys
 		, SysAttemptTrain sys
-		, [SysTrainData sys]
+		, SysList sys (SysTrainData sys)
 		)
 		()
 sysTrain sys = proc (alfa,errorT,attt,ld) -> do
@@ -204,7 +208,7 @@ data HandlerSysTrainP sys = HandlerSysTrainP
 			, SysAlfa sys
 			, SysErrorTrain sys
 			, SysNetwork sys
-			, [SysTrainData sys]
+			, SysList sys (SysTrainData sys)
 			)
 			(Maybe (SysNetwork sys))
 	, sysCatMaybesTP :: 
@@ -225,7 +229,7 @@ sysTrainP ::
 		( SysAlfa sys
 		, SysErrorTrain sys
 		, SysAttemptTrain sys
-		, [[SysTrainData sys]]
+		, SysList sys (SysList sys (SysTrainData sys))
 		)
 		()
 sysTrainP sys = proc (alfa,errorT,attt,lld) -> do
@@ -245,7 +249,7 @@ sysTrainP sys = proc (alfa,errorT,attt,lld) -> do
 data HandlerSysCalcylate sys = HandlerSysCalcylate
 	{ sysGetCNetworkC :: ArrSys sys () (SysCNetwork sys)
 	, sysHashNetworkC :: ArrSys sys (SysNetwork sys) (SysHash sys)
-	, sysCalculateC :: ArrSys sys (SysNetwork sys,[SysTrainData sys]) [SysTrainData sys]
+	, sysCalculateC :: ArrSys sys (SysNetwork sys,SysList (SysTrainData sys)) (SysList sys (SysTrainData sys))
 	, sysMapC :: forall a b.
 		ArrSys sys a b ->
 		ArrSys sys (SysContainer sys a) (SysContainer sys b)
@@ -259,8 +263,8 @@ sysCalculate ::
 	(Arrow (ArrSys sys), ArrowApply (ArrSys sys)) =>
 	HandlerSysCalcylate sys ->
 	ArrSys sys
-		[SysTrainData sys]
-		(SysContainer sys (SysHash sys,[SysTrainData sys]))
+		(SysList (SysTrainData sys))
+		(SysContainer sys (SysHash sys,SysList (SysTrainData sys)))
 sysCalculate sys = proc ld -> do
 	cn <- sysGetCNetworkC sys -< ()
 	sysZipC sys <<<
@@ -274,6 +278,45 @@ sysCalculate sys = proc ld -> do
 				sysCalculateC sys -< (n,ld)
 			)
 		) -<< cn
+
+type family SysDouble sys 
+
+--type family SysListForDouble sys
+
+--type SysLFD sys = SysListForDouble sys
+
+type family SysObject sys
+
+type family SysInt sys
+
+data HandlerSysLD sys = HandlerSysLD
+	{ sysToLD :: ArrSys sys (SysObject sys) (SysList sys (SysList sys (SysDouble sys))) -- full steriolezation ????????????????!!
+	, sysFromLD :: ArrSys sys (SysList sys (SysDouble sys), SysObject sys) (SysObject sys)
+	, sysEmptyLDA :: ArrSys sys () (SysObject sys)
+	}
+
+data HandlerSysCalculateLD sys = HandlerSysCalculateLD
+	{ hSysLD :: HandlerSysLD sys
+	-- , sysHeadLFD :: ArrSys sys (SysLFD sys a) a
+	, hSysCalculate :: HandlerSysCalculate sys
+	--, sysCToLFD :: ArrSys sys (SysContainer sys a) (SysLFD sys a)
+	, sysLengthLFD :: ArrSys sys (SysList sys a) (SysInt sys)
+	, sysIntIsNotZero :: ArrSys sys (SysInt sys) Bool
+	, sysMapHSCLD :: ArrSys sys a b -> ArrSys sys (SysList sys a) (SysList sys b)
+	}
+
+sysCalculateLD :: (-- Traversing (ArrSys sys), Mapping (ArrSys sys), Functor (SysLFD sys)
+	Arrow (ArrSys sys), ArrowApply (ArrSys sys), SysDouble sys ~ SysTrainDate sys
+	ArrowChoice (ArrSys sys)) =>
+	HandlerSysCalculateLD sys ->
+	ArrSys sys (SysObject sys) (SysLFD sys (SysHash sys, SysObject sys))
+sysCalculateLD sys = proc obj -> do
+	llhld <- (sysMapHSCLD sys) (sysCalculate $ hSysCalculate sys) <<< (sysCToLFD sys) -< obj
+	llhEa <- (sysMapHSCLD sys) (syMapHSCLD sys) (second (arr Endo <<< sysFromLD (hSysLD sys))) -< llhld
+	( +++
+
+	) <<<
+	arr (\b-> if b then Left () else Right ()) <<< (sysIntIsNotZero sys) <<< (sysLengthLFD sys) -< llhEa
 
 {-}
 calculateAdj :: 
