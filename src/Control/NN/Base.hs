@@ -303,6 +303,9 @@ data HandlerSysCalculateLD sys = HandlerSysCalculateLD
 	, sysLengthLFD :: ArrSys sys (SysList sys a) (SysInt sys)
 	, sysIntIsNotZero :: ArrSys sys (SysInt sys) Bool
 	, sysMapHSCLD :: ArrSys sys a b -> ArrSys sys (SysList sys a) (SysList sys b)
+	, sysFoldr1LD :: ArrSys sys (a,a) a -> ArrSys sys (SysList sys a) a
+	, sysZipLD :: ArrSys sys (SysList sys a, SysList sys b) (SysList sys (a,b))
+	, sysListEmpty :: ArrSys sys a (SysList sys b)
 	}
 
 sysCalculateLD :: (-- Traversing (ArrSys sys), Mapping (ArrSys sys), Functor (SysLFD sys)
@@ -313,10 +316,23 @@ sysCalculateLD :: (-- Traversing (ArrSys sys), Mapping (ArrSys sys), Functor (Sy
 sysCalculateLD sys = proc obj -> do
 	llhld <- (sysMapHSCLD sys) (sysCalculate $ hSysCalculate sys) <<< (sysCToLFD sys) -< obj
 	llhEa <- (sysMapHSCLD sys) (syMapHSCLD sys) (second (arr Endo <<< sysFromLD (hSysLD sys))) -< llhld
-	( +++
+	( ( proc () -> do
+		lha <- (sysFoldr1LD sys) f -< llhEa
+		(sysMapHSCLD sys) (second $ arr (\ea-> (appEndo ea) (sysEmptyLDA $ hSysLD sys))) -< lha
+		) +++ (
+		sysListEmpty sys
+		)
 
 	) <<<
 	arr (\b-> if b then Left () else Right ()) <<< (sysIntIsNotZero sys) <<< (sysLengthLFD sys) -< llhEa
+	where
+		f = proc (x,y) -> do
+			(sysMApHSCLD sys) g <<< (sysZipLD sys) -< (x,y)
+		g = arr (\((hx,ha),(hy,ay))->
+				if hx == hy
+					then (hx, ax <> ay)
+					else error "hash not eq" -- exception on arrow ?!?!?!?!
+			)
 
 {-}
 calculateAdj :: 
