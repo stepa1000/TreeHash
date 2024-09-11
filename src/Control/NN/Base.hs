@@ -158,7 +158,7 @@ type family SysTrainData sys
 
 type family SysAttemptTrain sys
 
-type family SysList sys
+type family SysList sys :: * -> *
 
 data HandlerSysTrain sys = HandlerSysTrain
 	{ sysGetCNetwork :: ArrSys sys () (SysCNetwork sys)
@@ -223,7 +223,7 @@ data HandlerSysTrainP sys = HandlerSysTrainP
 }
 
 sysTrainP :: 
-	(Arrow (ArrSys sys), ArrowApply (ArrSys sys), ArrowPlus (ArrSys sys)) =>
+	(Arrow (ArrSys sys), ArrowApply (ArrSys sys), ArrowPlus (ArrSys sys), Foldable (SysList sys)) =>
 	HandlerSysTrainP sys ->
 	ArrSys sys
 		( SysAlfa sys
@@ -246,10 +246,10 @@ sysTrainP sys = proc (alfa,errorT,attt,lld) -> do
 		) -<< cn
 	sysSetCNetworkTP sys -< cn2
 
-data HandlerSysCalcylate sys = HandlerSysCalcylate
+data HandlerSysCalculate sys = HandlerSysCalculate
 	{ sysGetCNetworkC :: ArrSys sys () (SysCNetwork sys)
 	, sysHashNetworkC :: ArrSys sys (SysNetwork sys) (SysHash sys)
-	, sysCalculateC :: ArrSys sys (SysNetwork sys,SysList (SysTrainData sys)) (SysList sys (SysTrainData sys))
+	, sysCalculateC :: ArrSys sys (SysNetwork sys,SysList sys (SysTrainData sys)) (SysList sys (SysTrainData sys))
 	, sysMapC :: forall a b.
 		ArrSys sys a b ->
 		ArrSys sys (SysContainer sys a) (SysContainer sys b)
@@ -261,10 +261,10 @@ data HandlerSysCalcylate sys = HandlerSysCalcylate
 
 sysCalculate :: 
 	(Arrow (ArrSys sys), ArrowApply (ArrSys sys)) =>
-	HandlerSysCalcylate sys ->
+	HandlerSysCalculate sys ->
 	ArrSys sys
-		(SysList (SysTrainData sys))
-		(SysContainer sys (SysHash sys,SysList (SysTrainData sys)))
+		(SysList sys (SysTrainData sys))
+		(SysContainer sys (SysHash sys,SysList sys (SysTrainData sys)))
 sysCalculate sys = proc ld -> do
 	cn <- sysGetCNetworkC sys -< ()
 	sysZipC sys <<<
@@ -300,37 +300,43 @@ data HandlerSysCalculateLD sys = HandlerSysCalculateLD
 	-- , sysHeadLFD :: ArrSys sys (SysLFD sys a) a
 	, hSysCalculate :: HandlerSysCalculate sys
 	--, sysCToLFD :: ArrSys sys (SysContainer sys a) (SysLFD sys a)
-	, sysLengthLFD :: ArrSys sys (SysList sys a) (SysInt sys)
+	, sysLengthLFD :: forall a. ArrSys sys (SysList sys a) (SysInt sys)
 	, sysIntIsNotZero :: ArrSys sys (SysInt sys) Bool
-	, sysMapHSCLD :: ArrSys sys a b -> ArrSys sys (SysList sys a) (SysList sys b)
-	, sysFoldr1LD :: ArrSys sys (a,a) a -> ArrSys sys (SysList sys a) a
-	, sysZipLD :: ArrSys sys (SysList sys a, SysList sys b) (SysList sys (a,b))
-	, sysListEmpty :: ArrSys sys a (SysList sys b)
+	, sysMapHSCLD :: forall a b. ArrSys sys a b -> ArrSys sys (SysList sys a) (SysList sys b)
+	, sysFoldr1LD :: forall a. ArrSys sys (a,a) a -> ArrSys sys (SysList sys a) a
+	, sysZipLD :: forall a b. ArrSys sys (SysList sys a, SysList sys b) (SysList sys (a,b))
+	, sysListEmpty :: forall a b. ArrSys sys a (SysList sys b)
+	, sysContainerToList :: forall a. ArrSys sys (SysContainer sys a) (SysList sys a)
 	}
 
 sysCalculateLD :: (-- Traversing (ArrSys sys), Mapping (ArrSys sys), Functor (SysLFD sys)
-	Arrow (ArrSys sys), ArrowApply (ArrSys sys), SysDouble sys ~ SysTrainDate sys
-	ArrowChoice (ArrSys sys)) =>
+	Arrow (ArrSys sys), ArrowApply (ArrSys sys), (SysDouble sys) ~ (SysTrainData sys),
+	ArrowChoice (ArrSys sys), Eq (SysHash sys)) =>
 	HandlerSysCalculateLD sys ->
-	ArrSys sys (SysObject sys) (SysLFD sys (SysHash sys, SysObject sys))
-sysCalculateLD sys = proc obj -> do
-	llhld <- (sysMapHSCLD sys) (sysCalculate $ hSysCalculate sys) <<< (sysCToLFD sys) -< obj
-	llhEa <- (sysMapHSCLD sys) (syMapHSCLD sys) (second (arr Endo <<< sysFromLD (hSysLD sys))) -< llhld
-	( ( proc () -> do
+	ArrSys sys (SysObject sys) (SysList sys (SysHash sys, SysObject sys))
+sysCalculateLD (sys :: HandlerSysCalculateLD sys) = proc obj -> do
+	llhld <- (sysMapHSCLD sys) (sysCalculate $ hSysCalculate sys) <<< (sysToLD $ hSysLD sys) -< obj
+	llhEa <- (sysMapHSCLD sys) (((sysMapHSCLD sys) 
+		(second ((arrEndo $ sysFromLD (hSysLD sys))))) <<< (sysContainerToList sys)) -< llhld
+	arr fe <<< ( ( proc () -> do
 		lha <- (sysFoldr1LD sys) f -< llhEa
-		(sysMapHSCLD sys) (second $ arr (\ea-> (appEndo ea) (sysEmptyLDA $ hSysLD sys))) -< lha
+		(sysMapHSCLD sys) (second (app <<< arr id &&& ((sysEmptyLDA $ hSysLD sys) <<< arr (const ())))) -< lha
 		) +++ (
-		sysListEmpty sys
-		)
-
-	) <<<
-	arr (\b-> if b then Left () else Right ()) <<< (sysIntIsNotZero sys) <<< (sysLengthLFD sys) -< llhEa
+		(sysListEmpty sys @() @(SysHash sys, SysObject sys))
+		)	
+		) <<< arr (\b-> if b then Left () else Right ()) <<< (sysIntIsNotZero sys) <<< (sysLengthLFD sys) -<< llhEa
 	where
+		fe (Left a) = a
+		fe (Right a) = a
+		-- arrEndo :: forall sys a. ArrSys sys (SysList sys (SysDouble sys), SysObject sys) (SysObject sys) ->
+		arrEndo ar = proc l -> do
+			returnA -< ar <<< (arr (const l)) &&& arr id
+		-- f :: ArrSys sys 
 		f = proc (x,y) -> do
-			(sysMApHSCLD sys) g <<< (sysZipLD sys) -< (x,y)
-		g = arr (\((hx,ha),(hy,ay))->
+			(sysMapHSCLD sys) g <<< (sysZipLD sys) -< (x,y)
+		g = arr (\((hx,ax),(hy,ay))->
 				if hx == hy
-					then (hx, ax <> ay)
+					then (hx, ax <<< ay)
 					else error "hash not eq" -- exception on arrow ?!?!?!?!
 			)
 

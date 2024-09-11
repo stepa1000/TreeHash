@@ -154,7 +154,7 @@ initNNS spw = do
 
 instance ListDoubled Word8 where
 	toLD a = [[fromIntegral a]] -- ????
-	fromLD (x:[]) _ = round x
+	fromLD (x:[]) _ = round (x / (realToFrac (maxBound :: Word8) )) 
 	emptyLDA = 0
 
 startlTNN :: MVar String -> SettingNN -> AdjunctorNN Word8 ()
