@@ -385,7 +385,7 @@ getSccArtPoint = do
 	liftIO $ sccArtPointIO gr
 
 -- | Вычисляет все возможные обьекты по случайно существующему в графе.
-upNNGr :: (Monad m, MonadIO m, Hashable a, ListDoubled a, Eq a, MonadLoger m) =>
+upNNGr :: (Monad m, MonadIO m, Hashable a, ListDoubled a, Eq a, MonadLoger m, Ord a) =>
 	M.AdjointT 
 		(NNGrAdjL a) 
 		(NNGrAdjR a)
@@ -405,15 +405,18 @@ upNNGr = do
 	let ma = (fmap snd rnode) <|> (listToMaybe $ fmap snd ln)
 	mapM_ (\a-> do
 		lr <- adjSnd $ calculateAdjLD $ unhashed a
-		let lnewNodes = newNodes (P.length lr) gr
+		-- let lnewNodes = newNodes (P.length lr) gr
 		lift $ logDebugM $ "upNNGR: Length result:" .< (P.length lr)
 		lift $ logDebugM "Post: calculateAdjLD"
-		adjFst $ adjSetEnv 
+		adjFst $ do
+			mapM_ (setOrdNode . hashed . snd) lr
+			mapM_ (\(hnn,r)-> setOrdEdge (a,hashed r, hnn)) lr
+		{-adjFst $ adjSetEnv 
 			(withStrategy rseq $ P.foldr 
 				(\(nn,(h,a)) b-> id $!
 					(maybe id (\(rn,_)-> insEdge (rn,nn,h)) rnode . insNode (nn, hashed a)) b
 				) gr $ P.zip lnewNodes lr
-			) (Identity ())
+			) (Identity ()) -}
 		) ma
 	lift $ logDebugM "End: upNNGr"
 
@@ -421,7 +424,7 @@ type Replicate = Int
 
 type SerchInt = Int
 
-updatingNNGr :: (Monad m, MonadIO m, Hashable a, Eq a, ListDoubled a, MonadLoger m) => 
+updatingNNGr :: (Monad m, MonadIO m, Hashable a, Eq a, ListDoubled a, MonadLoger m, Ord a) => 
 	SerchInt ->
 	M.AdjointT 
 		(NNGrAdjL a) 
@@ -450,7 +453,7 @@ onlyScc = do
 	adjFst $ adjSetEnv (subgraph ln gr) (Identity ())
 
 upgradingNNGr :: 
-	(	Monad m, MonadIO m, Hashable a, ListDoubled a, Eq a, 
+	(	Monad m, MonadIO m, Hashable a, ListDoubled a, Ord a, 
 		MonadLoger m
 	) => 
 	(Double,Double) ->
@@ -773,7 +776,7 @@ restorationNNSccLPrimer p pe pa = do
 type RestorationCycle = Int 
 
 restorationNNSccLPrimerUp' :: 
-	(Monad m, MonadIO m, Hashable a, ListDoubled a, Eq a, MonadLoger m, Show a) => 
+	(Monad m, MonadIO m, Hashable a, ListDoubled a, Ord a, MonadLoger m, Show a) => 
 	(Double,Double) ->
 	(Double,Double) ->
 	(a,a) ->
@@ -973,9 +976,9 @@ class ClassNNSLPowAdj f g a where
 
 -- forse
 restorationPow :: 
-	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a,
+	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Ord a,
 		ClassNNSLPowAdj f g a, Adjunction f g, Traversable f,
-		MonadLoger m, Show a
+		MonadLoger m, Show a, Ord (PowGr a)
 	) => 
 	(Double,Double) ->
 	(Double,Double) ->
@@ -1038,7 +1041,7 @@ restorationPow p pe (pa :: Proxy a) rc snn r si ui = do
 	lift $ logDebugM "End: restorationPow"
 
 restorationPowUp :: 
-	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a,
+	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Ord a,
 		ClassNNSLPowAdj f g a, Adjunction f g, Traversable f,
 		MonadLoger m, Show a
 	) => 
@@ -1061,7 +1064,7 @@ restorationPowUp p pe (pa :: (a,a)) rc snn r si ui = do
 	lift $ logInfoM "End: restorationPowUp"
 
 restorationPowUpN :: 
-	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a,
+	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Ord a,
 		ClassNNSLPowAdj f g a, Adjunction f g, Traversable f,
 		MonadLoger m, Show a
 	) => 
@@ -1322,7 +1325,7 @@ updateAssumptionPre p pe a snn r si ui sar = do
 		)
 
 updateAssumptionPost :: 
-	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a,
+	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Ord a,
 		ClassNNSLPowAdj f g a, ClassMapGrAdj f g a, ClassIMapNNRAdj f g,
 		MonadLoger m, Adjunction f g, Traversable f, NNSccListAdj f g a,
 		Show a
@@ -1347,7 +1350,7 @@ updateAssumptionPost p pe pa snn r si ui sar pr = do
 	lift $ logInfoM "End: updateAssumptionPost"
 
 updateAssumptionPostN :: 
-	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a,
+	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Ord a,
 		ClassNNSLPowAdj f g a, ClassMapGrAdj f g a, ClassIMapNNRAdj f g,
 		MonadLoger m, Adjunction f g, Traversable f, NNSccListAdj f g a,
 		Show a

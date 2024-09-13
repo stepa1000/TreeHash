@@ -21,6 +21,7 @@ import Data.Graph.Inductive.Query.BCC as G
 import Data.Graph.Inductive.Query.ArtPoint as G
 import Data.Graph.Inductive.Monad.IOArray as G
 import Data.Graph.Inductive.Monad as G
+import Data.Graph.Inductive.NodeMap as G
 import Data.ByteString as B
 import Data.Word
 import Data.Aeson as Aeson
@@ -44,16 +45,41 @@ import Data.Functor.Identity
 import Data.History
 import Other.Utils
 
-setEqNode :: (Monad m, Hashable a, Hashable b, Eq a) =>
+setOrdNode :: (Monad m, Hashable a, Hashable b, Ord a, Eq b) =>
 	a ->
 	M.AdjointT
 		(Env (Gr a b))
 		(Reader (Gr a b))
 		m
 		()
-setEqNode a = do
+setOrdNode a = do
 	gr <- adjGetEnv
-	let gr' = ufold (\c grn -> ufold (\c2 e-> ) (Right G.empty) grn ) G.empty gr
+	--let ln = fmap snd $ labNodes gr
+	--let le = fmap (\_ _ x-> x) $ labEdges gr
+	adjSetEnv (G.run_ gr $ insMapNodeM a ) (Identity ())
+{-
+	let gr' = ufold (\c grn -> ufold (\c2 e-> f c c2 grn e) (Right G.empty) grn ) G.empty gr
+	where
+		f (toC,nod,a,fromC) (toC2,nod2,a2,fromC2) grn (Right gru) = 
+			if a == a2
+				then Left $ (fTo toC toC2, nod2, a2, fFrom fromC fromC2) G.& gru
+			where
+				fTo lbn1 lbn2 = zipWith (\(b1,n1) (b2,n2)-> 
+					if b1 == b2
+						then Left (b2,n2)
+						else Right ((b1,),(b2,n2))
+						) lbn1 lbn2-}
+
+setOrdEdge :: (Monad m, Ord a) =>
+	(a,a,b) ->
+	M.AdjointT
+		(Env (Gr a b))
+		(Reader (Gr a b))
+		m
+		()
+setOrdEdge aab = do
+	gr <- adjGetEnv
+	adjSetEnv (G.run_ gr $ insMapEdgeM aab) (Identity ())
 
 getInfoHGr ::(Monad m, Hashable a, Hashable b, Eq a) => 
 	M.AdjointT 
