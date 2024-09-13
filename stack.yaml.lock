@@ -38,17 +38,6 @@ packages:
     commit: d47c29187e5f0c616b992f296e83d0f3253832d3
     git: https://github.com/stepa1000/free-profunctor.git
 - completed:
-    commit: a61830a7da61cf95acabcf43a1f019bbdfccc984
-    git: https://github.com/stepa1000/bpann-my.git
-    name: bpann-my
-    pantry-tree:
-      sha256: 6875c81b9d2d16c8f3fbd769a21d645adc947a756f99a3fe9582ae07ec540c47
-      size: 780
-    version: 0.1.0.0
-  original:
-    commit: a61830a7da61cf95acabcf43a1f019bbdfccc984
-    git: https://github.com/stepa1000/bpann-my.git
-- completed:
     commit: 6ae87703d11ab4aac8ff47d6acf347fe3cc055da
     git: https://github.com/stepa1000/fgl.git
     name: fgl
@@ -73,9 +62,16 @@ packages:
       size: 224
   original:
     hackage: fgl-visualize-0.1.0.1@sha256:e682066053a6e75478a08fd6822dd0143a3b8ea23244bdb01dd389a266447c5e,995
+- completed:
+    hackage: bpann-0.1.1@sha256:f3245a48d2a67f7e6551559ecc216f841db4887311392e60f53c07a0eeab3365,738
+    pantry-tree:
+      sha256: 2b0f6446394f669f6ab30725358f2ea7f28f919955005bdde74bd46adca68f75
+      size: 204
+  original:
+    hackage: bpann-0.1.1@sha256:f3245a48d2a67f7e6551559ecc216f841db4887311392e60f53c07a0eeab3365,738
 snapshots:
 - completed:
-    sha256: 496a3c34464c7dc85d9bd413fe45aea6e86c376d1c368799164b85ed16f0ea2e
-    size: 631264
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/nightly/2024/5/1.yaml
-  original: nightly-2024-05-01
+    sha256: 0621c0de3be24b3a554f00f274746541cc78f740fd92464963ddfae1a4f114ce
+    size: 661369
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/nightly/2024/9/12.yaml
+  original: nightly-2024-09-12

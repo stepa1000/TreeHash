@@ -33,7 +33,7 @@ dependencies:
 - unordered-containers
 - aeson
 - bytestring
-- bpann-my
+- bpann 
 - time
 - parallel
 - either

@@ -67,7 +67,7 @@ import Control.Monad.Trans.Free -- Control.Monad.Trans.Free.Church
 import GHC.Generics
 import GHC.TypeNats
 import AI.BPANN
-import AI.BPANN.Async
+-- import AI.BPANN.Async
 import Data.Monoid
 import Control.Base.Comonad
 import Control.Core.Biparam
@@ -168,7 +168,7 @@ creatRandomNetworksAdj_ :: (Monad m, MonadIO m, MonadLoger m) =>
 		m 
 		()
 creatRandomNetworksAdj_ j = do
-	--lift $ logDebugM "*** Start: creatRandomNetworksAdj_"
+	lift $ logDebugM "*** Start: creatRandomNetworksAdj_"
 	ln <- creatRandomNetworksAdj j
 	{-lift $ logDebugM "Start: Neiron desctiptions"
 	mapM_ (\l2-> mapM_ (\l1-> mapM_ (\(n,_)->do
@@ -178,7 +178,8 @@ creatRandomNetworksAdj_ j = do
 		lift $ logDebugM $ "w: " .< (ws n)
 		) l1) l2) ln-}
 	--lift $ logDebugM "End: Neiron desctiptions"
-	--lift $ logDebugM "*** End: creatRandomNetworksAdj_"
+	lift $ logDebugM $ "Length list NN " .< (P.length ln)
+	lift $ logDebugM "*** End: creatRandomNetworksAdj_"
 	-- lnold <- adjFst $ adjGetEnv
 	adjFst $ adjSetEnv ln (Identity ())
 
@@ -192,14 +193,14 @@ trainAdj :: (Monad m, MonadIO m,MonadLoger m) =>
 		m 
 		()
 trainAdj p pe ldd = do
-	--lift $ logDebugM "Start: trainAdj"
+	lift $ logDebugM "Start: trainAdj"
 	i <- liftIO $ randomRIO p
 	e <- liftIO $ randomRIO pe
 	lnold <- adjFst $ adjGetEnv
-	--lift $ logDebugM $ "Length list NN:" .< (P.length lnold)
-	let ln = catMaybes $ P.map (\n-> train 100000 i e n ldd) lnold
+	lift $ logDebugM $ "Length list NN:" .< (P.length lnold)
+	let ln = P.map (\n-> train i e n ldd) lnold
 	-- ln <- fmap catMaybes $ P.mapM (\n-> liftIO $ trainIO 100000 i e n ldd) lnold
-	--lift $ logDebugM $ "Length list result NN:" .< (P.length ln)
+	lift $ logDebugM $ "Length list result NN:" .< (P.length ln)
 	--lift $ logDebugM $ "Input train:" .< ldd
 	--lift $ logDebugM "Start: Neiron desctiptions in trainAdj"
 	{-mapM_ (\l2-> mapM_ (\l1-> mapM_ (\(n,_)->do
@@ -211,7 +212,8 @@ trainAdj p pe ldd = do
 	--lift $ logDebugM "End: Neiron desctiptions in trainAdj"
 	adjFst $ adjSetEnv ln (Identity ())
 	--lift $ logDebugM "End: trainAdj"
-
+	
+-- | Обучает Нейронную сеть на множестве данных. 
 trainAdjP :: (Monad m, MonadIO m) => 
 	(Double,Double) ->
 	(Double,Double) ->
@@ -227,12 +229,13 @@ trainAdjP p pe lldd = do
 	lnold <- adjFst $ adjGetEnv
 	let ln = catMaybes $ P.map (\n-> P.foldr (\ ldd mn'-> (do
 			n' <- mn'
-			train 100000 i e n' ldd
+			return $ train i e n' ldd
 		) <|> (do
-			train 100000 i e n ldd
+			return $ train i e n ldd -- delete Maybe!!!!!!!!!!!!!!!
 		)) (Just n) lldd ) lnold
 	adjFst $ adjSetEnv ln (Identity ())
 
+-- | Вычесляект хеш по неронной сете и вычесляет результат по данным. 
 calculateAdj :: 
 	(	Monad m, MonadIO m,
 		MonadLoger m
@@ -246,6 +249,7 @@ calculateAdj ::
 calculateAdj ld = do
 	lift $ logDebugM "Start: calculateAdj"
 	lnold <- adjFst $ adjGetEnv
+	lift $ logDebugM "Post: adjGetEnv"
 	--lift $ logDebugM $ "Length list NN: " .< (P.length lnold)
 	--lift $ logDebugM "Start: Neiron desctiptions"
 	{-mapM_ (\l2-> mapM_ (\l1-> mapM_ (\(n,_)->do
@@ -255,12 +259,16 @@ calculateAdj ld = do
 		lift $ logDebugM $ "w: " .< (ws n)
 		) l1) l2) lnold-}
 	--lift $ logDebugM "End: Neiron desctiptions"
+	lift $ logDebugM $ "Hread list NN" .< (P.head lnold)
+	lift $ logDebugM $ "Length lidt NN " .< (P.length lnold)
 	let lh = fmap (hash . packNetwork) lnold
 	let lc = fmap (\n-> calculate n ld) lnold
 	ll <- adjSnd $ adjGetEnv
 	--lift $ logDebugM $ "List layers: " .< ll
 	--lift $ logDebugM $ "Input to calculate" .< ld
 	--lift $ logDebugM $ "List result calculate: " .< lc
+	lift $ logDebugM $ "Length lidt hash " .< (P.length lh)
+	lift $ logDebugM $ "Length list answer " .< (P.length lc)
 	lift $ logDebugM "End: calculateAdj"
 	return $ P.zip lh lc
 
@@ -269,6 +277,7 @@ class ListDoubled a where
 	fromLD :: [Double] -> a -> a
 	emptyLDA :: a
 
+-- | Вычесляет результат сразу рестерелизуя тип.
 calculateAdjLD :: 
 	(	Monad m, MonadIO m, ListDoubled a,
 		MonadLoger m
@@ -318,6 +327,9 @@ calculateAdjLDL :: (Monad m, MonadIO m, ListDoubled a, MonadLoger m) =>
 		[[(HashNN,a)]]
 calculateAdjLDL = mapM calculateAdjLD
 
+-- | Переобучает нейронную сеть.
+--
+--  Неронная сеть в монаде.
 trainAdjLD :: 
 	(	Monad m, MonadIO m, Hashable a, ListDoubled a, Eq a,
 		MonadLoger m
@@ -332,8 +344,9 @@ trainAdjLD ::
 		m 
 		()
 trainAdjLD p pe (x,y) i = do
-	mapM_ (trainAdj p pe) $ P.replicate i (P.zip (toLD x) (toLD y))
+	mapM_ (trainAdj p pe) $ P.replicate i (P.zip (toLD x) (toLD y)) -- ???????
 
+-- | Обучает неронную сеть на списе тип данных рестериализуя их.
 trainAdjLDL :: 
 	(	Monad m, MonadIO m, Hashable a, ListDoubled a, Eq a,
 		MonadLoger m
@@ -354,11 +367,12 @@ trainAdjLDL p pe lp = do
 
 type HashNN = Hash
 
-type NNGrAdjL a = (Env (Gr (Hashed a) HashNN)) :.: AdjNetworkL
+-- | Граф обьектов и закономерностей между ними.
+type NNGrAdjL a = (Env (Gr (Hashed a) HashNN)) :.: AdjNetworkL -- Только хеши обьектов ??????? 
 
-type NNGrAdjR a = AdjNetworkR :.: (Reader (Gr (Hashed a) HashNN))
-  
-getSccArtPoint :: (Monad m, MonadIO m, Hashable a, Eq a, MonadLoger m) => 
+type NNGrAdjR a = AdjNetworkR :.: (Reader (Gr (Hashed a) HashNN)) -- ???????
+
+getSccArtPoint :: (Monad m, MonadIO m, Hashable a, Eq a, MonadLoger m) => -- может просто связаности?
 	M.AdjointT 
 		(NNGrAdjL a) 
 		(NNGrAdjR a)
@@ -370,6 +384,7 @@ getSccArtPoint = do
 	--return $ 
 	liftIO $ sccArtPointIO gr
 
+-- | Вычисляет все возможные обьекты по случайно существующему в графе.
 upNNGr :: (Monad m, MonadIO m, Hashable a, ListDoubled a, Eq a, MonadLoger m) =>
 	M.AdjointT 
 		(NNGrAdjL a) 
@@ -380,14 +395,14 @@ upNNGr = do
 	lift $ logDebugM "Start: upNNGr"
 	gr <- adjFst $ adjGetEnv
 	lift $ logDebugM "Pre: get graph"
-	gct1 <- liftIO getCurrentTime 
+	--gct1 <- liftIO getCurrentTime 
 	let ln = withStrategy (seqList rseq) $ G.labNodes gr
 	lift $ logDebugM $ "Length list node graph: " .< (P.length ln)
 	lift $ logDebugM $ "Length list edge graph: " .< (P.length $ G.labEdges gr)	
-	gct2 <- liftIO getCurrentTime 
-	lift $ logDebugM $ "diff time on labNodes: " .< (diffUTCTime gct2 gct1)
-	rnode <- liftIO $ getRandomElementList ln
-	let ma = fmap snd rnode
+	--gct2 <- liftIO getCurrentTime 
+	--lift $ logDebugM $ "diff time on labNodes: " .< (diffUTCTime gct2 gct1)
+	rnode <- liftIO $ getRandomElementList ln -- ???????????????
+	let ma = (fmap snd rnode) <|> (listToMaybe $ fmap snd ln)
 	mapM_ (\a-> do
 		lr <- adjSnd $ calculateAdjLD $ unhashed a
 		let lnewNodes = newNodes (P.length lr) gr
@@ -782,6 +797,9 @@ restorationNNSccLPrimerUp' p pe pa rc snn r si ui = do
 		lift $ logInfoM "Post: restorationNNSccLPrimer"  -- logDebugM
 		when (b || (P.null lhscchnn)) $ do
 			adjNNSLliftAdjNetworkL $ creatRandomNetworksAdj_ snn
+			lnn <- adjNNSLliftLN adjGetEnv
+			lift $ logInfoM $ "Must generation NN " .< snn
+			lift $ logInfoM $ "Generation NN " .< (P.length lnn)
 			adjNNSLliftNNGr $ adjSetEnv G.empty (Identity ())
 			lift $ logInfoM "Pre: upgradingNNGr"
 			adjNNSLliftAdjNNGr $ upgradingNNGr p pe pa r si ui
