@@ -44,6 +44,17 @@ import Data.Functor.Identity
 import Data.History
 import Other.Utils
 
+setEqNode :: (Monad m, Hashable a, Hashable b, Eq a) =>
+	a ->
+	M.AdjointT
+		(Env (Gr a b))
+		(Reader (Gr a b))
+		m
+		()
+setEqNode a = do
+	gr <- adjGetEnv
+	let gr' = ufold (\c grn -> ufold (\c2 e-> ) (Right G.empty) grn ) G.empty gr
+
 getInfoHGr ::(Monad m, Hashable a, Hashable b, Eq a) => 
 	M.AdjointT 
 		(Env (Gr a b)) 
