@@ -193,14 +193,14 @@ trainAdj :: (Monad m, MonadIO m,MonadLoger m) =>
 		m 
 		()
 trainAdj p pe ldd = do
-	lift $ logDebugM "Start: trainAdj"
+	-- lift $ logDebugM "Start: trainAdj"
 	i <- liftIO $ randomRIO p
 	e <- liftIO $ randomRIO pe
 	lnold <- adjFst $ adjGetEnv
-	lift $ logDebugM $ "Length list NN:" .< (P.length lnold)
+	-- lift $ logDebugM $ "Length list NN:" .< (P.length lnold)
 	let ln = P.map (\n-> train i e n ldd) lnold
 	-- ln <- fmap catMaybes $ P.mapM (\n-> liftIO $ trainIO 100000 i e n ldd) lnold
-	lift $ logDebugM $ "Length list result NN:" .< (P.length ln)
+	-- lift $ logDebugM $ "Length list result NN:" .< (P.length ln)
 	--lift $ logDebugM $ "Input train:" .< ldd
 	--lift $ logDebugM "Start: Neiron desctiptions in trainAdj"
 	{-mapM_ (\l2-> mapM_ (\l1-> mapM_ (\(n,_)->do
@@ -247,9 +247,9 @@ calculateAdj ::
 		m 
 		[(Hash,[Double])]
 calculateAdj ld = do
-	lift $ logDebugM "Start: calculateAdj"
+	-- lift $ logDebugM "Start: calculateAdj"
 	lnold <- adjFst $ adjGetEnv
-	lift $ logDebugM "Post: adjGetEnv"
+	--lift $ logDebugM "Post: adjGetEnv"
 	--lift $ logDebugM $ "Length list NN: " .< (P.length lnold)
 	--lift $ logDebugM "Start: Neiron desctiptions"
 	{-mapM_ (\l2-> mapM_ (\l1-> mapM_ (\(n,_)->do
@@ -259,17 +259,17 @@ calculateAdj ld = do
 		lift $ logDebugM $ "w: " .< (ws n)
 		) l1) l2) lnold-}
 	--lift $ logDebugM "End: Neiron desctiptions"
-	lift $ logDebugM $ "Hread list NN" .< (P.head lnold)
-	lift $ logDebugM $ "Length lidt NN " .< (P.length lnold)
+	--lift $ logDebugM $ "Hread list NN" .< (P.head lnold)
+	--lift $ logDebugM $ "Length lidt NN " .< (P.length lnold)
 	let lh = fmap (hash . packNetwork) lnold
 	let lc = fmap (\n-> calculate n ld) lnold
 	ll <- adjSnd $ adjGetEnv
 	--lift $ logDebugM $ "List layers: " .< ll
 	--lift $ logDebugM $ "Input to calculate" .< ld
 	--lift $ logDebugM $ "List result calculate: " .< lc
-	lift $ logDebugM $ "Length lidt hash " .< (P.length lh)
-	lift $ logDebugM $ "Length list answer " .< (P.length lc)
-	lift $ logDebugM "End: calculateAdj"
+	--lift $ logDebugM $ "Length lidt hash " .< (P.length lh)
+	--lift $ logDebugM $ "Length list answer " .< (P.length lc)
+	--lift $ logDebugM "End: calculateAdj"
 	return $ P.zip lh lc
 
 class ListDoubled a where
@@ -289,9 +289,9 @@ calculateAdjLD ::
 		m
 		[(HashNN,a)]
 calculateAdjLD a = do
-	lift $ logDebugM "Start:calculateAdjLD"
+	--lift $ logDebugM "Start:calculateAdjLD"
 	llhld <- mapM calculateAdj $ toLD a
-	lift $ logDebugM $ "calculate head list:" .< (P.length $ P.head llhld)
+	--lift $ logDebugM $ "calculate head list:" .< (P.length $ P.head llhld)
 	--lift $ logDebugM $ "List hashes: " .< ((fmap . fmap) fst llhld)
 	--lift $ logDebugM $ "Length list calculate: " .< (P.length llhld)
 	-- lift $ logDebugM $ "Elements calculate:" .< 
@@ -300,15 +300,15 @@ calculateAdjLD a = do
 	if (P.length llhEa) /= 0 
 		then do
 		let lha = P.foldr1 (\x y -> f x y) llhEa
-		lift $ logDebugM $ "Length list calculate result: " .< (P.length lha)
+		--lift $ logDebugM $ "Length list calculate result: " .< (P.length lha)
 		let r = fmap (\(h,ea)->(h,(appEndo ea) emptyLDA)) lha
 		--lift $ logDebugM $ "List hashes: " .< (fmap fst r)
 		--lift $ logDebugM $ "Length list endo applayed: " .< (P.length r)
-		lift $ logDebugM "End:calculateAdjLD"
+		--lift $ logDebugM "End:calculateAdjLD"
 		return r
 		else do
-		lift $ logDebugM "End:calculateAdjLD"
-		lift $ logWarningM "sterilrzrd list length 0"	
+		--lift $ logDebugM "End:calculateAdjLD"
+		--lift $ logWarningM "sterilrzrd list length 0"	
 		return []
 	where
 		f !xl !yl = fmap g $ P.zip xl yl
