@@ -1043,7 +1043,7 @@ restorationPow p pe (pa :: Proxy a) rc snn r si ui = do
 restorationPowUp :: 
 	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Ord a,
 		ClassNNSLPowAdj f g a, Adjunction f g, Traversable f,
-		MonadLoger m, Show a
+		MonadLoger m, Show a, Ord (PowGr a)
 	) => 
 	(Double,Double) ->
 	(Double,Double) ->
@@ -1066,7 +1066,7 @@ restorationPowUp p pe (pa :: (a,a)) rc snn r si ui = do
 restorationPowUpN :: 
 	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Ord a,
 		ClassNNSLPowAdj f g a, Adjunction f g, Traversable f,
-		MonadLoger m, Show a
+		MonadLoger m, Show a, Ord (PowGr a)
 	) => 
 	(Double,Double) ->
 	(Double,Double) ->
@@ -1328,7 +1328,7 @@ updateAssumptionPost ::
 	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Ord a,
 		ClassNNSLPowAdj f g a, ClassMapGrAdj f g a, ClassIMapNNRAdj f g,
 		MonadLoger m, Adjunction f g, Traversable f, NNSccListAdj f g a,
-		Show a
+		Show a, Ord (PowGr a)
 	) => 
 	(Double,Double) ->
 	(Double,Double) ->
@@ -1353,7 +1353,7 @@ updateAssumptionPostN ::
 	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Ord a,
 		ClassNNSLPowAdj f g a, ClassMapGrAdj f g a, ClassIMapNNRAdj f g,
 		MonadLoger m, Adjunction f g, Traversable f, NNSccListAdj f g a,
-		Show a
+		Show a, Ord (PowGr a)
 	) => 
 	(Double,Double) ->
 	(Double,Double) ->
@@ -1579,6 +1579,7 @@ type FunIURP n m a = InputUpdateRecoinPre n a ->
 
 type CxtMessRecoin m n a = (ListMInputGrT (n + 1) a ~ 
 	(Maybe (RecoinPowGrT1 (n + 1) a), ListMInputGr (n <=? 0) n a),
+	Ord (RecoinPowGrT1 (n + 1) a),
 	KnownNat n,
 	Adjunction (FRecionAdjL (n <=? 0) n a) (FRecionAdjR (n <=? 0) n a), 
 	Adjunction (FRecionAdjL ((n + 1) <=? 0) (n + 1) a) (FRecionAdjR ((n + 1) <=? 0) (n + 1) a),
@@ -1818,7 +1819,7 @@ nextIURPost (iurp :: InputUpdateRecoinPost (n + 1) a) = iurp
 
 updateRecoinPost0 :: 
 	(	CxtMessRecoin m 0 a, ClassMapGrAdj (Recion0AdjL a) (Recion0AdjR a) (PowGr a),
-		Show a) =>
+		Show a, Ord (PowGr a)) =>
 	InputUpdateRecoinPost 0 a ->
 	M.AdjointT 
 		(FRecionAdjLT1 0 a) 
@@ -1892,7 +1893,7 @@ updateAPost ::
 	(	Monad m, MonadIO m, Hashable a, ListDoubled a,Eq a,
 		ClassNNSLPowAdj f g a, ClassMapGrAdj f g a, ClassIMapNNRAdj f g,
 		MonadLoger m, Adjunction f g, ClassConfNNAdj f g, Traversable f,
-		NNSccListAdj f g a, Show a
+		NNSccListAdj f g a, Show a, Ord a, Ord (PowGr a)
 	) =>
 	(a,a) -> 
 	( AllResult a

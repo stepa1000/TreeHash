@@ -6,6 +6,7 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Data.Imp.NNS where
 
@@ -92,7 +93,11 @@ instance ClassNNSLPowAdj (NNAdjL a) (NNAdjR a) a where
 instance NNSccListAdj (NNAdjL a) (NNAdjR a) a where
 	liftNNSccListAdj = liftNNSccListAdjA
 
-lernToNN :: (Hashable a, Show a, ToJSON a, FromJSON a, ListDoubled a) => 
+instance Ord a => Ord (PowGr a) where
+	compare x y = compare (OrdGr x) (OrdGr y)
+
+lernToNN :: (Hashable a, Show a, ToJSON a, FromJSON a, ListDoubled a, Ord a
+	, Ord (PowGr a)) => 
 	MVar String -> SettingNN -> [(a,a)] -> AdjunctorNN a ()
 lernToNN mvs spw lpw = do
 	-- like lernToMemory
