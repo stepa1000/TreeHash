@@ -48,7 +48,7 @@ metric llpn1 llpn2 =
 getRandomElementList :: [a] -> IO (Maybe a)
 getRandomElementList la = do
 	let l = P.length la
-	i <- randomRIO (0,l)
+	i <- randomRIO (0,l + 1)
 	return $ la P.!? i
 
 getRELs :: Int -> [a] -> IO [a]

@@ -54,32 +54,29 @@ setOrdNode :: (Monad m, Hashable a, Hashable b, Ord a, Eq b) =>
 		()
 setOrdNode a = do
 	gr <- adjGetEnv
-	--let ln = fmap snd $ labNodes gr
-	--let le = fmap (\_ _ x-> x) $ labEdges gr
 	adjSetEnv (G.run_ gr $ insMapNodeM a ) (Identity ())
-{-
-	let gr' = ufold (\c grn -> ufold (\c2 e-> f c c2 grn e) (Right G.empty) grn ) G.empty gr
-	where
-		f (toC,nod,a,fromC) (toC2,nod2,a2,fromC2) grn (Right gru) = 
-			if a == a2
-				then Left $ (fTo toC toC2, nod2, a2, fFrom fromC fromC2) G.& gru
-			where
-				fTo lbn1 lbn2 = zipWith (\(b1,n1) (b2,n2)-> 
-					if b1 == b2
-						then Left (b2,n2)
-						else Right ((b1,),(b2,n2))
-						) lbn1 lbn2-}
 
-setOrdEdge :: (Monad m, Ord a) =>
+setOrdEdge :: (Monad m, Ord a, Eq b) =>
 	(a,a,b) ->
 	M.AdjointT
 		(Env (Gr a b))
 		(Reader (Gr a b))
 		m
 		()
-setOrdEdge aab = do
+setOrdEdge aab@(a1,a2,b1) = do
 	gr <- adjGetEnv
-	adjSetEnv (G.run_ gr $ insMapEdgeM aab) (Identity ())
+	let gr2 = G.gfiltermap fb gr
+	if G.isEmpty gr2
+		then do
+			adjSetEnv (G.run_ gr $ insMapEdgeM aab) (Identity ())
+		else return ()
+	where
+		fb (lTo,n,a,lFrom) = 
+			if (a1 == a || a2 == a) && ((isJust $ P.lookup b1 lTo) || (isJust $ P.lookup b1 lFrom))
+				then if isJust $ P.lookup b1 lTo
+					then Just (lTo,n,a,[])
+					else Just ([],n,a,lFrom)
+				else Nothing
 
 getInfoHGr ::(Monad m, Hashable a, Hashable b, Eq a) => 
 	M.AdjointT 

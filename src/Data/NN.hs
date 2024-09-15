@@ -401,12 +401,16 @@ upNNGr = do
 	lift $ logDebugM $ "Length list edge graph: " .< (P.length $ G.labEdges gr)	
 	--gct2 <- liftIO getCurrentTime 
 	--lift $ logDebugM $ "diff time on labNodes: " .< (diffUTCTime gct2 gct1)
-	rnode <- liftIO $ getRandomElementList ln -- ???????????????
-	let ma = (fmap snd rnode) <|> (listToMaybe $ fmap snd ln)
+	-- lnode <- (fmap . fmap) snd $ liftIO $ getRELs 10 ln -- ???????????????
+	rnode <- liftIO $ getRandomElementList ln
+	lift $ logDebugM $ "Node index: " .< (show $ fmap fst rnode)
+	-- lift $ logDebugM $ "Length list random node: " .< (P.length lnode)
+	let ma = (fmap snd rnode) <|> (Just $ P.last $ fmap snd ln)
 	mapM_ (\a-> do
 		lr <- adjSnd $ calculateAdjLD $ unhashed a
 		-- let lnewNodes = newNodes (P.length lr) gr
 		lift $ logDebugM $ "upNNGR: Length result:" .< (P.length lr)
+		lift $ logDebugM $ "upNNGR: eq with argument: " .< (and $ fmap ((== (unhashed a) ) . snd) lr)
 		lift $ logDebugM "Post: calculateAdjLD"
 		adjFst $ do
 			mapM_ (setOrdNode . hashed . snd) lr
