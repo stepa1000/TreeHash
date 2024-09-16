@@ -144,6 +144,26 @@ lnnull :: (Monad m, MonadIO m) =>
 		Bool
 lnnull = fmap P.null $ adjFst $ adjGetEnv
 
+maxMinMetricNN :: (Monad m, MonadIO m, PackedNeuron ~ [Double]) =>
+	M.AdjointT
+		AdjNetworkL
+		AdjNetworkR
+		m
+		(Double,Double)
+maxMinMetricNN = do
+	ln <- adjFst $ adjGetEnv
+	return $ (\(a,b)-> (getMin a, getMax b)) $ P.foldl1 (<>) $ f ln
+	where
+		f l = do
+			let l2 = fmap packNetwork l
+			x <- l2
+			y <- l2
+			return $ (\a->(Min a, Max a)) $ 
+				P.sum $ 
+				P.zipWith (\ x1 y1 -> P.sum $ 
+					P.zipWith (\ x2 y2 -> P.sum $ 
+						P.zipWith (\a b-> abs $ a - b) x2 y2) x1 y1) x y
+
 type SizeNN = Int
 
 creatRandomNetworksAdj :: (Monad m, MonadIO m) => 
@@ -199,6 +219,8 @@ trainAdj p pe ldd = do
 	lnold <- adjFst $ adjGetEnv
 	-- lift $ logDebugM $ "Length list NN:" .< (P.length lnold)
 	let ln = P.map (\n-> train i e n ldd) lnold
+	minMaxM <- maxMinMetricNN 
+	lift $ logDebugM $ "Min/Max Metrics for all NN: " .< minMaxM
 	-- ln <- fmap catMaybes $ P.mapM (\n-> liftIO $ trainIO 100000 i e n ldd) lnold
 	-- lift $ logDebugM $ "Length list result NN:" .< (P.length ln)
 	--lift $ logDebugM $ "Input train:" .< ldd
@@ -327,7 +349,7 @@ calculateAdjLDL :: (Monad m, MonadIO m, ListDoubled a, MonadLoger m) =>
 		[[(HashNN,a)]]
 calculateAdjLDL = mapM calculateAdjLD
 
--- | Переобучает нейронную сеть.
+-- | Переобучает нейронную сеть. ДО КОНСТАНТЫ.
 --
 --  Неронная сеть в монаде.
 trainAdjLD :: 
