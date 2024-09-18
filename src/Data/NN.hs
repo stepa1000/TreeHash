@@ -299,6 +299,43 @@ class ListDoubled a where
 	fromLD :: [Double] -> a -> a
 	emptyLDA :: a
 
+trainToResultAdj ::
+	(	Monad m, MonadIO m, ListDouble a,
+		MonadLoger m
+	) =>
+	(a,a) ->
+	M.AdjointT 
+		AdjNetworkL
+		AdkNetworkR
+		m
+		()
+trainToResultAdj = undefined
+
+type TakeFunInt = Int
+
+trainAddWithFunAdj :: 
+	(	Monad m, MonadIO m, ListDouble a,
+		MonadLoger m, Eq a
+	) =>
+	(Double,Double) ->
+	(Double,Double) ->
+	TakeFunInt ->
+	(a -> a) ->
+	(a,a) ->
+	MAdjointT
+		AdjNetworkL	
+		AdjNetworkR
+		m
+		()
+trainAddWithFunAdj p pe j f (x,y) = do
+	i <- liftIO $ randomIOR p
+	e <- liftIO $ randomIOR pe
+	let f' = \a -> if a == x then y else f a
+	let l = foldl (\((a,b):xs) c -> ((b,c):(a,b):xs) ) [(x,y)] $ iterate f' y
+	
+
+
+
 -- | Вычесляет результат сразу рестерелизуя тип.
 calculateAdjLD :: 
 	(	Monad m, MonadIO m, ListDoubled a,
@@ -618,7 +655,7 @@ getLikeNN = do
 		) mi
 
 -- MemAdjL ???
-type NNSccListAdjL a = (HistoryAdjL [(Gr (Hashed a) HashNN)]) :.: (NNPrimeAdjL a) 
+type NNSccListAdjL a = (HistoryAdjL [(Gr (Hashed a) HashNN)]) :.: (NNPrimeAdjL a) -- ?????????????????
 
 type NNSccListAdjR a = (NNPrimeAdjR a) :.: (HistoryAdjR [(Gr (Hashed a) HashNN)])
 

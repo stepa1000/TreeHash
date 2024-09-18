@@ -143,8 +143,8 @@ initNNS spw = do
 		_ -> encodeFile @(DataNNSLPow PWord) (fileNNForState spw) dnnD
 	where
 		dnnD = DataNNSLPow 
-				(DataNN [7,3,7] IMap.empty 11)
-				(DataNN [1,3,3,1] IMap.empty 11)
+				(DataNN [1,2,1] IMap.empty 11)
+				(DataNN [1,1,1] IMap.empty 11)
 				Map.empty
 				IMap.empty
 				(ConfNN 
