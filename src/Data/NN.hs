@@ -79,6 +79,13 @@ import Other.Utils
 import Control.Logger
 import Data.Adj.Graph
 
+trainNext :: 
+	Double ->
+	Network ->
+	[([Double],[Double])] ->
+	Network
+trainNext a nw s = P.foldl (backprop a) nw s 
+
 type Hash = Int
 
 type LNetwork = [Network]
@@ -299,22 +306,41 @@ class ListDoubled a where
 	fromLD :: [Double] -> a -> a
 	emptyLDA :: a
 
+trainToResult :: (Eq a) =>
+	Double ->
+	(a,a) ->
+	Network ->
+	Network
+trainToResult a (x,y) n = f n
+	where
+		f !n' = if y == y2 then n2 else f n2
+			where
+				n2 = P.foldl (\ nn c -> trainNext a nn c) n $ P.zip (toLD x) (toLD y)
+				y2 = P.foldl (\ld yn-> fromLD ld yn) emptyLDA $ fmap (calculate n2) (toLD x)
+
 trainToResultAdj ::
-	(	Monad m, MonadIO m, ListDouble a,
+	(	Monad m, MonadIO m, ListDoubled a,
 		MonadLoger m
 	) =>
+	(Double,Double) ->
 	(a,a) ->
 	M.AdjointT 
 		AdjNetworkL
-		AdkNetworkR
+		AdjNetworkR
 		m
 		()
-trainToResultAdj = undefined
+trainToResultAdj p pxy = do
+	i <- liftIO $ randomRIO p
+	lnold <- adjFst $ adjGetEnv
+	let ln = P.map (\n-> trainToResult i pxy n) lnold
+	minMaxM <- maxMinMetricNN
+	lift $ logDebugM $ "Min/Max metric for NN: " .< minMaxM
+	adjFst $ adjSetEnv ln (Identity ())
 
 type TakeFunInt = Int
 
 trainAddWithFunAdj :: 
-	(	Monad m, MonadIO m, ListDouble a,
+	(	Monad m, MonadIO m, ListDoubled a,
 		MonadLoger m, Eq a
 	) =>
 	(Double,Double) ->
@@ -322,19 +348,17 @@ trainAddWithFunAdj ::
 	TakeFunInt ->
 	(a -> a) ->
 	(a,a) ->
-	MAdjointT
+	M.AdjointT
 		AdjNetworkL	
 		AdjNetworkR
 		m
 		()
 trainAddWithFunAdj p pe j f (x,y) = do
-	i <- liftIO $ randomIOR p
-	e <- liftIO $ randomIOR pe
+	i <- liftIO $ randomRIO p
+	e <- liftIO $ randomRIO pe
 	let f' = \a -> if a == x then y else f a
-	let l = foldl (\((a,b):xs) c -> ((b,c):(a,b):xs) ) [(x,y)] $ iterate f' y
-	
-
-
+	let l = P.foldl (\((a,b):xs) c -> ((b,c):(a,b):xs) ) [(x,y)] $ iterate f' y
+	undefined
 
 -- | Вычесляет результат сразу рестерелизуя тип.
 calculateAdjLD :: 
