@@ -17,7 +17,7 @@
 #
 # resolver: ./custom-snapshot.yaml-
 # resolver: https://example.com/snapshots/2023-01-01.yaml
-resolver: nightly-2024-09-12 # lts-22.18
+resolver: nightly-2024-09-19 # lts-22.18
 
 apply-ghc-options: everything
 rebuild-ghc-options: true

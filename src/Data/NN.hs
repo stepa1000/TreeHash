@@ -315,7 +315,7 @@ trainToResult :: (Eq a, ListDoubled a) =>
 	Network
 trainToResult a (x,y :: a) n = f n
 	where
-		f n' = if traceShowId $ y == y2 then n2 else f $ trace "f: " $ traceShowId n2
+		f !n' = if traceShowId $ y == y2 then n2 else f $ trace "f: " $ traceShowId n2
 			where
 				n2 = id $ trainNext a n $ traceShowId $ trace "n2: " $ P.zip (toLD x) (toLD y)
 				y2 :: a
