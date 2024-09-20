@@ -79,12 +79,14 @@ import Other.Utils
 import Control.Logger
 import Data.Adj.Graph
 
+import Debug.Trace
+
 trainNext :: 
 	Double ->
 	Network ->
 	[([Double],[Double])] ->
 	Network
-trainNext a nw s = P.foldl (backprop a) nw s 
+trainNext a nw s = traceShowId $ P.foldl (backprop a) nw $ traceShowId $ trace "trainNext: " s 
 
 type Hash = Int
 
@@ -306,21 +308,22 @@ class ListDoubled a where
 	fromLD :: [Double] -> a -> a
 	emptyLDA :: a
 
-trainToResult :: (Eq a) =>
+trainToResult :: (Eq a, ListDoubled a) =>
 	Double ->
 	(a,a) ->
 	Network ->
 	Network
-trainToResult a (x,y) n = f n
+trainToResult a (x,y :: a) n = f n
 	where
-		f !n' = if y == y2 then n2 else f n2
+		f n' = if traceShowId $ y == y2 then n2 else f $ trace "f: " $ traceShowId n2
 			where
-				n2 = P.foldl (\ nn c -> trainNext a nn c) n $ P.zip (toLD x) (toLD y)
-				y2 = P.foldl (\ld yn-> fromLD ld yn) emptyLDA $ fmap (calculate n2) (toLD x)
+				n2 = id $ trainNext a n $ traceShowId $ trace "n2: " $ P.zip (toLD x) (toLD y)
+				y2 :: a
+				y2 = id $ P.foldl (\yn ld-> fromLD ld yn) emptyLDA $ traceShowId $ trace "y2: " $ fmap (calculate n2) (toLD x)
 
 trainToResultAdj ::
 	(	Monad m, MonadIO m, ListDoubled a,
-		MonadLoger m
+		MonadLoger m, Eq a
 	) =>
 	(Double,Double) ->
 	(a,a) ->
@@ -427,7 +430,8 @@ trainAdjLD ::
 		m 
 		()
 trainAdjLD p pe (x,y) i = do
-	mapM_ (trainAdj p pe) $ P.replicate i (P.zip (toLD x) (toLD y)) -- ???????
+	trainToResultAdj p (x,y) 
+	-- mapM_ (trainAdj p pe) $ P.replicate i (P.zip (toLD x) (toLD y)) -- ???????
 
 -- | Обучает неронную сеть на списе тип данных рестериализуя их.
 trainAdjLDL :: 
