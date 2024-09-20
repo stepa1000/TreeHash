@@ -313,10 +313,12 @@ trainToResult :: (Eq a, ListDoubled a) =>
 	(a,a) ->
 	Network ->
 	Network
-trainToResult a (x,y :: a) n = fromJust $ P.find (\nn-> (g nn) == y) $ P.iterate (\n2-> trainNext a n2 (P.zip (toLD x) (toLD y)) ) n
+trainToResult a (x,y :: a) n = snd $ fromJust $ P.find (\(nx,ny)-> or [(g ny) == y, (packNetwork nx) == (packNetwork ny)] ) $ f $ 
+	P.iterate @(Network,Double) (\(n2 :: Network,an)-> (trainNext an n2 (P.zip (toLD x) (toLD y)), an * 0.9) ) ((n,a) :: (Network,Double) )
 	where
 		g nn = P.foldl (\yn ld -> fromLD ld yn) emptyLDA $ fmap (calculate nn) (toLD x)
-{-
+		f (x1:x2:ln) = P.foldl (\ ((y1,y2):ys) nn -> ((y2,nn):(y1,y2):ys) ) [(fst x1, fst x2)] $ fmap fst ln
+{-	
 		f !n' = if traceShowId $ y == y2 then n2 else f $ trace "f: " $ traceShowId n2
 			where
 				n2 = id $ trainNext a n $ traceShowId $ trace "n2: " $ P.zip (toLD x) (toLD y)
