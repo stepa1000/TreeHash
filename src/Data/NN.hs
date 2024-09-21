@@ -86,7 +86,8 @@ trainNext ::
 	Network ->
 	[([Double],[Double])] ->
 	Network
-trainNext a nw s = traceShowId $ P.foldl (backprop a) nw $ traceShowId $ trace "trainNext: " s 
+trainNext a nw s = P.foldl (backprop a) nw s
+-- traceShowId $ P.foldl (backprop a) nw $ traceShowId $ trace "trainNext: " s 
 
 type Hash = Int
 
@@ -314,8 +315,8 @@ trainToResult :: (Eq a, ListDoubled a) =>
 	(a,a) ->
 	Network ->
 	Maybe Network
-trainToResult takeMax a (x,y :: a) n = fmap snd $ P.find (\(nx,ny)-> or [(g ny) == y, (packNetwork nx) == (packNetwork ny)] ) $ P.take takeMax $ f $ 
-	P.iterate @(Network,Double) (\(n2 :: Network,an)-> (trainNext an n2 (P.zip (toLD x) (toLD y)), an * 0.99) ) ((n,a) :: (Network,Double) )
+trainToResult takeMax a (x,y :: a) n = fmap snd $ P.find (\(nx,ny)-> or [(g ny) == y, (packNetwork nx) == (packNetwork ny)] ) $ f $ P.take takeMax $
+	P.iterate' @(Network,Double) (\(n2 :: Network,an)-> (trainNext an n2 (P.zip (toLD x) (toLD y)), an * 0.99) ) ((n,a) :: (Network,Double) )
 	where
 		g nn = P.foldl (\yn ld -> fromLD ld yn) emptyLDA $ fmap (calculate nn) (toLD x)
 		f (x1:x2:ln) = P.foldl (\ ((y1,y2):ys) nn -> ((y2,nn):(y1,y2):ys) ) [(fst x1, fst x2)] $ fmap fst ln
@@ -340,7 +341,7 @@ trainToResultAdj ::
 trainToResultAdj p pxy = do
 	i <- liftIO $ randomRIO p
 	lnold <- adjFst $ adjGetEnv
-	let ln = catMaybes $ P.map (\n-> trainToResult 2 i pxy n) lnold
+	let ln = catMaybes $ P.map (\n-> trainToResult 10000 i pxy n) lnold
 	lift $ logDebugM $ "Length list NN post trainToresult: " .< (P.length ln)
 	minMaxM <- maxMinMetricNN
 	lift $ logDebugM $ "Min/Max metric for NN: " .< minMaxM
