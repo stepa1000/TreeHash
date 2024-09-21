@@ -144,7 +144,7 @@ initNNS spw = do
 	where
 		dnnD = DataNNSLPow 
 				(DataNN [1,2,1] IMap.empty 11)
-				(DataNN [0,0,0] IMap.empty 11)
+				(DataNN [1,1,1] IMap.empty 11)
 				Map.empty
 				IMap.empty
 				(ConfNN 
@@ -160,6 +160,7 @@ initNNS spw = do
 instance ListDoubled Word8 where
 	toLD a = [[fromIntegral a]] -- ????
 	fromLD (x:[]) _ = round (x / (realToFrac (maxBound :: Word8) )) 
+	fromLD l _ = error $ "pattern error: " .< show l
 	emptyLDA = 0
 
 startlTNN :: MVar String -> SettingNN -> AdjunctorNN Word8 ()
