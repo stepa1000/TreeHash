@@ -144,7 +144,7 @@ initNNS spw = do
 	where
 		dnnD = DataNNSLPow 
 				(DataNN [1,2,1] IMap.empty 11)
-				(DataNN [1,50,1] IMap.empty 11)
+				(DataNN [1,256,1] IMap.empty 11)
 				Map.empty
 				IMap.empty
 				(ConfNN 
