@@ -89,6 +89,14 @@ trainNext ::
 trainNext a nw s = P.foldl (backprop a) nw s
 -- traceShowId $ P.foldl (backprop a) nw $ traceShowId $ trace "trainNext: " s 
 
+metricForNN :: LNetwork -> [(Network,Double)]
+metricForNN ln = do
+	x <- ln
+	xm <- do 
+		y <- ln
+		return $ (metric (packNetwork x) (packNetwork y))
+	return (x,sum xm)
+
 type Hash = Int
 
 type LNetwork = [Network]
