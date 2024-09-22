@@ -14,6 +14,7 @@ import Data.HashSet as Set
 import Data.HashMap.Lazy as Map
 import Data.Tree as Tree
 import Data.Maybe
+import Data.List
 import Data.Graph.Inductive.PatriciaTree as G
 import Data.Graph.Inductive.Graph as G
 import Data.Graph.Inductive.Query.DFS as G
@@ -68,7 +69,15 @@ setOrdEdge aab@(a1,a2,b1) = do
 	let gr2 = G.gfiltermap fb gr
 	if G.isEmpty gr2
 		then do
-			adjSetEnv (G.run_ gr $ insMapEdgeM aab) (Identity ())
+			let nubL = nub $ G.labEdges gr
+			let ln = nub $ labNodes gr {-
+			if P.length nubL < (P.length $ G.labEdges gr)
+				then adjSetEnv ( (\grn-> P.foldl (\grn2 x-> insEdge x grn2) grn nubL) $ 
+					G.run_ (G.gmap (\(_,n,a,_) ->([],n,a,[])) gr) $
+					insMapEdgeM aab
+					) (Identity ())
+				else-} 
+			adjSetEnv (G.run_ (G.mkGraph ln nubL) $ insMapEdgeM aab) (Identity ())
 		else return ()
 	where
 		fb (lTo,n,a,lFrom) = 

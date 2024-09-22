@@ -143,8 +143,8 @@ initNNS spw = do
 		_ -> encodeFile @(DataNNSLPow PWord) (fileNNForState spw) dnnD
 	where
 		dnnD = DataNNSLPow 
-				(DataNN [1,2,1] IMap.empty 11)
-				(DataNN [1,1,1] IMap.empty 11)
+				(DataNN [50,2,50] IMap.empty 11)
+				(DataNN [1,50,1] IMap.empty 11)
 				Map.empty
 				IMap.empty
 				(ConfNN 
@@ -158,8 +158,8 @@ initNNS spw = do
 					)
 
 instance ListDoubled Word8 where
-	toLD a = [[(fromIntegral a) * 0.001]] -- ????
-	fromLD (x:[]) _ = round ((x * 1000) / (realToFrac (maxBound :: Word8) )) 
+	toLD a = [[fromIntegral a]] -- ????
+	fromLD (x:[]) _ = round (x / (realToFrac (maxBound :: Word8) )) 
 	fromLD l _ = error $ "pattern error: " .< show l
 	emptyLDA = 0
 
