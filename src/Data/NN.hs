@@ -97,6 +97,26 @@ metricForNN ln = do
 		return $ (metric (packNetwork x) (packNetwork y))
 	return (x,sum xm)
 
+minWithMetric :: [(Netwotk,Double)] -> (Network,Double)
+minWithMetric (x:xs) = foldl (\ (an,da) (bn,db) -> if da < db then (an,da) else (bn,db)) x xs
+
+maxWithMetric :: [(Network,Double)] -> (Network,Double)
+maxWithMetric (x:xs) = foldl (\ (an,da) (bn,bd) -> if da < bd then (bn,bd) else (an,da) ) x xs
+
+shareMetrics2080 :: [(Network,Double)] -> ([(Network,Double)],[(Network,Double)])
+shareMetrics2080 l = (filter (\(_.d)-> d <= (dm + minM)) l, filter (\(_,d) -> d > (dm + minM)) l)
+	where
+		minM = snd $ minWithMetric l
+		maxM = snd $ maxWithMetric l
+		dm = abs (maxM - minM) * 0.2
+
+basis20 :: [(Network,Double)] -> [(Network,Double)]
+basis20 l = (minWithMetric l) : (basis20 lb20)
+	where
+		lb20 = fst shareMetrics2080
+
+basis80 :: [(Network,Double)] -> [(Network,Double)]
+
 type Hash = Int
 
 type LNetwork = [Network]
