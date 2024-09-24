@@ -109,13 +109,21 @@ shareMetrics2080 l = (filter (\(_.d)-> d <= (dm + minM)) l, filter (\(_,d) -> d 
 		minM = snd $ minWithMetric l
 		maxM = snd $ maxWithMetric l
 		dm = abs (maxM - minM) * 0.2
+shareMetrics2080 [] = ([],[])
 
 basis20 :: [(Network,Double)] -> [(Network,Double)]
 basis20 l = (minWithMetric l) : (basis20 lb20)
 	where
 		lb20 = fst shareMetrics2080
 
-basis80 :: [(Network,Double)] -> [(Network,Double)]
+basisMetric :: [(Network,Double)] -> [(Network,Double)]
+basisMetric l = case (xl,yl) of
+	([],[]) -> []
+	(xl,[]) -> basis20 xl
+	([],yl) -> basisMetric yl
+	(xl,yl) -> (basisMertric xl) ++ (basisMetric yl)
+	where
+		(xl,yl) = shareMetrics2080 l
 
 type Hash = Int
 
